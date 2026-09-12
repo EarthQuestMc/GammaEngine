@@ -45,3 +45,6 @@ hs_err_pid*
 /Sourcetrail/
 /bin/
 /workspace/
+
+# Rust native engine
+native/target/

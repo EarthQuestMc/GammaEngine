@@ -1,0 +1,31 @@
+[package]
+name = "gammaengine-native"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "Optional native acceleration for the GammaEngine Minecraft 1.7.10 server"
+license = "LGPL-2.1-or-later"
+publish = false
+
+[lib]
+# The JVM loads this through System.loadLibrary("gammaengine_native").
+name = "gammaengine_native"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Pure-Rust deflate/zlib: no system zlib to link, so the same build works on every
+# target the server runs on.
+flate2 = { version = "1.0", default-features = false, features = ["rust_backend"] }
+jni = { version = "0.21", default-features = false }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+# Unwinding must stay enabled: a panic has to be caught at the FFI boundary and turned
+# into a Java-side fallback. Aborting would take the whole server down.
+panic = "unwind"
+
+[dev-dependencies]
+# Independent XXH64 implementation, used only to cross-check ours in tests.
+twox-hash = "1.6"
