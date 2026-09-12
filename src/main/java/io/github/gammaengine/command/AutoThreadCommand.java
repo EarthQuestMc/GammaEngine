@@ -2,6 +2,8 @@ package io.github.gammaengine.command;
 
 import io.github.gammaengine.GammaEngine;
 import io.github.gammaengine.autothread.AutoThreadRuntime;
+import io.github.gammaengine.bench.BenchmarkSpec;
+import io.github.gammaengine.bench.WorldBenchmark;
 import io.github.gammaengine.concurrent.ManagedPool;
 import io.github.gammaengine.concurrent.ThreadPools;
 import io.github.gammaengine.profiler.GammaProfiler;
@@ -33,7 +35,8 @@ public class AutoThreadCommand extends Command {
                         + "&b  >&e /autothread regions &7-&a active regions and their owners.\n"
                         + "&b  >&e /autothread conflicts &7-&a observed access conflicts.\n"
                         + "&b  >&e /autothread native &7-&a native engine state.\n"
-                        + "&b  >&e /autothread profile start|stop|report &7-&a profiling session."));
+                        + "&b  >&e /autothread profile start|stop|report &7-&a profiling session.\n"
+                        + "&b  >&e /autothread bench start|stop &7-&a synthetic load benchmark."));
         setPermission("gammaengine.autothread");
     }
 
@@ -60,6 +63,8 @@ public class AutoThreadCommand extends Command {
             nativeEngine(sender);
         } else if ("profile".equals(action)) {
             profile(sender, args);
+        } else if ("bench".equals(action)) {
+            bench(sender, args);
         } else {
             sender.sendMessage(usageMessage);
         }
@@ -140,6 +145,36 @@ public class AutoThreadCommand extends Command {
             sendLines(sender, report);
         } else {
             sender.sendMessage(ChatColor.GRAY + "Usage: /autothread profile <start|stop|report>");
+        }
+    }
+
+    /**
+     * Runs the synthetic-load benchmark. The load is built and measured on the server thread, so
+     * the command returns immediately and the report arrives when the run ends.
+     */
+    private void bench(final CommandSender sender, String[] args) {
+        String sub = args.length > 1 ? args[1].toLowerCase() : "";
+        if ("stop".equals(sub) || "cancel".equals(sub)) {
+            WorldBenchmark.get().cancel();
+            sender.sendMessage(ChatColor.GREEN + "Benchmark cancelled.");
+            return;
+        }
+        if (!"start".equals(sub)) {
+            sender.sendMessage(ChatColor.GRAY
+                    + "Usage: /autothread bench start [chunks=8] [entities=500] [tiles=500] [ticks=600] [name=run]");
+            sender.sendMessage(ChatColor.GRAY + "       /autothread bench stop");
+            return;
+        }
+
+        BenchmarkSpec spec = BenchmarkSpec.parse(args, 2);
+        String error = WorldBenchmark.get().start(spec, new WorldBenchmark.Listener() {
+            @Override
+            public void message(String line) {
+                sender.sendMessage(ChatColor.GRAY + line);
+            }
+        });
+        if (error != null) {
+            sender.sendMessage(ChatColor.RED + error);
         }
     }
 

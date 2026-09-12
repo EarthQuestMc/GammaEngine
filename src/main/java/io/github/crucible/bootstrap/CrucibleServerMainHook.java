@@ -54,12 +54,18 @@ public class CrucibleServerMainHook {
 
         Lwjgl3ifyGlue.checkJava();
 
-        if (!verifyLibraries()) {
+        // GammaEngine - time the verification: it reads and hashes every library jar on every boot,
+        // so it is one of the few startup costs that is paid even when nothing changed.
+        long verificationStart = System.nanoTime();
+        boolean librariesReady = verifyLibraries();
+        long verificationMillis = (System.nanoTime() - verificationStart) / 1_000_000L;
+
+        if (!librariesReady) {
             setupLibraries();
             System.out.println("[GammaEngine] GammaEngine installed! A restart is required to be able to boot.");
             System.exit(0);
         } else {
-            System.out.println("[GammaEngine] Everything in check, booting the server");
+            System.out.println("[GammaEngine] Libraries verified in " + verificationMillis + " ms, booting the server");
         }
     }
 

@@ -159,33 +159,107 @@ public class LibraryManager {
         };
     }
 
+    /**
+     * Verifies every library jar against its recorded MD5.
+     *
+     * <p>GammaEngine: this runs on every single boot over roughly a hundred megabytes of jars, so it
+     * is worth doing well. Two changes against the original: the jars are hashed in parallel across
+     * the available cores, and each jar is streamed through the digest instead of being read whole
+     * into a byte array, which removes a multi-megabyte allocation per library at the exact moment
+     * the heap is still cold.
+     *
+     * <p>The result is unchanged: true only when every jar exists and matches, and the first
+     * mismatch still means "reinstall the libraries".
+     */
     public static boolean checkIntegrity(Path libraryRoot, String[] neededLibraries) throws IOException, NoSuchAlgorithmException {
-        for (String neededLibrary : neededLibraries) {
-            String[] identifiers = neededLibrary.split(":");
-            if (identifiers.length != 3) {
-                throw new IllegalArgumentException("Invalid identifier " + neededLibrary);
-            }
-            final String jarRelativeName = String.format("./%1$s/%2$s/%3$s/%2$s-%3$s.jar", identifiers[0].replace('.', '/'),
-                    identifiers[1], identifiers[2]);
-            final Path jarFile = libraryRoot.resolve(jarRelativeName).normalize().toAbsolutePath();
-            final Path checksumFie = libraryRoot.resolve(jarRelativeName + ".md5").normalize().toAbsolutePath();
-            if (Files.isRegularFile(jarFile) && Files.isRegularFile(checksumFie)) {
-                String checksum = String.join("", Files.readAllLines(checksumFie));
-                if (checksum.equals("skip")) {
-                    System.out.println("[GammaEngine] Skipping verification of " + neededLibrary);
-                    continue;
-                }
-
-                MessageDigest digest = MessageDigest.getInstance("MD5");
-                if (!checksum.equalsIgnoreCase(encodeHex(digest.digest(Files.readAllBytes(jarFile))))) {
+        int workers = Math.max(1, Math.min(io.github.gammaengine.platform.CpuTopology.get().physicalCores(),
+                neededLibraries.length));
+        if (workers == 1 || neededLibraries.length < 4) {
+            for (String neededLibrary : neededLibraries) {
+                if (!checkOne(libraryRoot, neededLibrary)) {
                     return false;
                 }
-            } else {
-                return false;
             }
-
+            return true;
         }
-        return true;
+
+        java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(
+                workers, new java.util.concurrent.ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable runnable) {
+                        Thread thread = new Thread(runnable, "GammaEngine-LibraryCheck");
+                        thread.setDaemon(true);
+                        return thread;
+                    }
+                });
+        try {
+            List<Future<Boolean>> results = new ArrayList<>(neededLibraries.length);
+            for (final String neededLibrary : neededLibraries) {
+                results.add(executor.submit(new Callable<Boolean>() {
+                    @Override
+                    public Boolean call() throws Exception {
+                        return checkOne(libraryRoot, neededLibrary);
+                    }
+                }));
+            }
+            for (Future<Boolean> result : results) {
+                try {
+                    if (!result.get()) {
+                        return false;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof IOException) {
+                        throw (IOException) cause;
+                    }
+                    if (cause instanceof NoSuchAlgorithmException) {
+                        throw (NoSuchAlgorithmException) cause;
+                    }
+                    throw new IOException("Library verification failed", cause);
+                }
+            }
+            return true;
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private static boolean checkOne(Path libraryRoot, String neededLibrary)
+            throws IOException, NoSuchAlgorithmException {
+        String[] identifiers = neededLibrary.split(":");
+        if (identifiers.length != 3) {
+            throw new IllegalArgumentException("Invalid identifier " + neededLibrary);
+        }
+        final String jarRelativeName = String.format("./%1$s/%2$s/%3$s/%2$s-%3$s.jar", identifiers[0].replace('.', '/'),
+                identifiers[1], identifiers[2]);
+        final Path jarFile = libraryRoot.resolve(jarRelativeName).normalize().toAbsolutePath();
+        final Path checksumFie = libraryRoot.resolve(jarRelativeName + ".md5").normalize().toAbsolutePath();
+        if (!Files.isRegularFile(jarFile) || !Files.isRegularFile(checksumFie)) {
+            return false;
+        }
+
+        String checksum = String.join("", Files.readAllLines(checksumFie));
+        if (checksum.equals("skip")) {
+            System.out.println("[GammaEngine] Skipping verification of " + neededLibrary);
+            return true;
+        }
+        return checksum.equalsIgnoreCase(encodeHex(digestOf(jarFile)));
+    }
+
+    /** Streams a file through MD5 without ever holding it in memory. */
+    private static byte[] digestOf(Path file) throws IOException, NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("MD5");
+        byte[] buffer = new byte[64 * 1024];
+        try (InputStream in = Files.newInputStream(file)) {
+            int read;
+            while ((read = in.read(buffer)) > 0) {
+                digest.update(buffer, 0, read);
+            }
+        }
+        return digest.digest();
     }
 
     //==================================================================================================================

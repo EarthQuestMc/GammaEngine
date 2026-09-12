@@ -126,8 +126,44 @@ Déroulé :
 5. Le réseau : sortir la compression du tick, réutiliser les buffers là où c'est prouvé sûr, ne
    jamais changer le protocole.
 
+6. Le démarrage, parce qu'il se paie à chaque redémarrage et à chaque crash.
+
 Méthode pour chaque point : mesurer avant, modifier, mesurer après, ne garder que si le gain est
 réel et le comportement identique.
+
+### Démarrage : ce qui est fait et ce qui bloque
+
+Mesuré sur monde existant sans mods, démarrage total 9,7 s depuis le lancement de la JVM :
+
+| Étape | Durée | État |
+| --- | --- | --- |
+| Démarrage JVM et pré-lancement | ~1,5 s | Vérification des bibliothèques passée de 244 à 92 ms |
+| Chargement et transformation des classes par LaunchWrapper | ~5,5 s | Bloqué, voir ci-dessous |
+| Registres, énumérations dynamiques, chargement des mods | ~1,5 s | Non traité |
+| Préparation de la zone de spawn | ~0,8 s | 625 chunks lus et décodés en parallèle |
+
+Ce qui a été parallélisé :
+
+* **Vérification des bibliothèques.** Elle lisait et hachait une centaine de mégaoctets de jars sur
+  un seul thread à chaque démarrage. Les jars sont maintenant hachés en parallèle et passés en flux
+  au lieu d'être chargés entiers en mémoire. Mesuré : 244 ms à 92 ms, et plus aucune allocation de
+  plusieurs mégaoctets au moment où le tas est encore froid.
+* **Préparation de la zone de spawn.** Les 625 chunks du spawn étaient lus, décompressés et décodés
+  un par un. Ils sont maintenant préchargés en parallèle par l'exécuteur d'entrées-sorties de Forge,
+  qui sépare déjà la lecture, faite sur un worker, de la validation dans le monde, faite sur le
+  thread serveur. Seuls les chunks déjà générés sont préchargés : la génération de terrain, surtout
+  moddée, n'est pas sûre en multithread et reste séquentielle.
+
+Ce qui ne peut pas être parallélisé aujourd'hui, et pourquoi : les 5,5 s de chargement de classes
+passent par LaunchWrapper, dont le chargeur de classes n'est pas déclaré parallèle et sérialise donc
+toute la chaîne de transformation bytecode. Ce chargeur ne vit pas dans ce dépôt. La vraie solution
+n'est d'ailleurs pas de le paralléliser mais de ne plus refaire le travail : un cache disque du
+bytecode déjà transformé, invalidé quand la liste des mods, la version du serveur ou la chaîne de
+transformers changent. C'est le prochain gros poste de démarrage et il est ajouté ici comme tel.
+
+De même, l'ordre de chargement des mods Forge et des plugins Bukkit ne peut pas être parallélisé :
+il est imposé par les dépendances entre mods et par l'injection des registres. Prétendre le
+contraire produirait un serveur qui démarre vite et charge mal.
 
 Critères de sortie : un tableau avant/après documenté par optimisation, aucun changement de
 comportement, tests au vert, un monde identique octet pour octet après le même scénario.

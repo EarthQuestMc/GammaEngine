@@ -38,6 +38,7 @@ public final class AutoThreadRuntime {
     private volatile Thread mainThread;
     private ThreadPools pools;
     private long tickStartNanos;
+    private final java.util.List<Runnable> tickTasks = new java.util.concurrent.CopyOnWriteArrayList<Runnable>();
 
     private AutoThreadRuntime() {
     }
@@ -73,15 +74,48 @@ public final class AutoThreadRuntime {
     /** Called once the server finished loading worlds and is about to accept players. */
     public void onServerStarted() {
         running = true;
+        // Total startup, measured from JVM start rather than from the point vanilla starts counting,
+        // because that is the number an operator actually waits through.
+        try {
+            long uptimeMillis = java.lang.management.ManagementFactory.getRuntimeMXBean().getUptime();
+            GammaEngine.LOGGER.info("Startup complete in {} s from JVM start", String.format("%.2f", uptimeMillis / 1000.0));
+            GammaProfiler.get().record("server.startup", uptimeMillis * 1_000_000L);
+        } catch (Throwable ignored) {
+            // A JVM without the runtime MX bean still boots; it just does not report the number.
+        }
         if (GammaConfig.configs.gamma_profiling_enabledAtStartup) {
             GammaProfiler.get().startSession();
             GammaEngine.LOGGER.info("Profiling session started automatically (gamma.profiling.enabledAtStartup)");
         }
     }
 
+    /**
+     * Registers work to run on the server thread at the start of every tick.
+     *
+     * <p>Used by engine subsystems that need a heartbeat without adding another patch to
+     * {@code MinecraftServer}. Tasks must be short: they run inside the tick they are measuring.
+     */
+    public void addTickTask(Runnable task) {
+        tickTasks.add(task);
+    }
+
+    public void removeTickTask(Runnable task) {
+        tickTasks.remove(task);
+    }
+
     /** Called at the very beginning of {@code MinecraftServer.tick()}. */
     public void onTickStart() {
         tickStartNanos = System.nanoTime();
+        if (!tickTasks.isEmpty()) {
+            for (Runnable task : tickTasks) {
+                try {
+                    task.run();
+                } catch (Throwable error) {
+                    // An engine heartbeat must never be the reason a tick fails.
+                    GammaEngine.LOGGER.error("Tick task failed", error);
+                }
+            }
+        }
     }
 
     /** Called at the very end of {@code MinecraftServer.tick()}. */
