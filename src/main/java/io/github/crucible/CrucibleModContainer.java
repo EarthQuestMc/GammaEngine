@@ -87,6 +87,7 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
     @Subscribe
     public void serverStarting(FMLServerStartingEvent evt) {
         evt.registerServerCommand("crucible", new CrucibleCommand(evt.getServer()));
+        evt.registerServerCommand("autothread", new io.github.gammaengine.command.AutoThreadCommand()); // GammaEngine
         CrucibleAPI.registerModPlugin(this);
         metrics = new Metrics(this, 6555);
     }
@@ -102,7 +103,17 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
                 "io.github.crucible.patches",
                 "io.github.crucible.util",
                 "io.github.crucible.wrapper",
-                "io.github.crucible"
+                "io.github.crucible",
+                // GammaEngine packages, owned by the same dummy mod container so that Forge's
+                // package ownership checks and the Bukkit plugin bridge see them as first-party.
+                "io.github.gammaengine",
+                "io.github.gammaengine.autothread",
+                "io.github.gammaengine.command",
+                "io.github.gammaengine.concurrent",
+                "io.github.gammaengine.config",
+                "io.github.gammaengine.nativeengine",
+                "io.github.gammaengine.platform",
+                "io.github.gammaengine.profiler"
         );
     }
 

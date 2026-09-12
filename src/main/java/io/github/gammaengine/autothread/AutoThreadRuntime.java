@@ -1,0 +1,164 @@
+package io.github.gammaengine.autothread;
+
+import io.github.gammaengine.GammaEngine;
+import io.github.gammaengine.concurrent.ManagedPool;
+import io.github.gammaengine.concurrent.ThreadPools;
+import io.github.gammaengine.config.GammaConfig;
+import io.github.gammaengine.platform.CpuTopology;
+import io.github.gammaengine.profiler.GammaProfiler;
+import io.github.gammaengine.profiler.TickStatistics;
+
+/**
+ * The AutoThread runtime: single owner of every threading decision the server makes.
+ *
+ * <p>The contract with the rest of the server is intentionally narrow. Patched Minecraft, Forge
+ * and Bukkit code calls into this class at a handful of lifecycle points; it never asks the
+ * runtime "may I parallelize this", it hands over work and the runtime decides. That keeps the
+ * patch surface small enough to rebase on upstream Crucible, and it keeps the decision logic in
+ * one place where it can be reasoned about.
+ *
+ * <p>Boot order, which matters because each step depends on the previous one:
+ * <ol>
+ *   <li>{@link #boot()} while the server is starting: configuration, CPU topology, thread pools.</li>
+ *   <li>{@link #onServerStarted()} once worlds exist: subsystems that need a world.</li>
+ *   <li>{@link #onTickStart()} / {@link #onTickEnd()} around every server tick.</li>
+ *   <li>{@link #shutdown()} before the server saves and exits.</li>
+ * </ol>
+ *
+ * <p>Thread ownership: the field {@link #mainThread} is the thread that ran {@link #boot()}, which
+ * is the Minecraft server thread. Everything that has to answer "am I allowed to touch the world
+ * right now" ultimately compares against it.
+ */
+public final class AutoThreadRuntime {
+    private static final AutoThreadRuntime INSTANCE = new AutoThreadRuntime();
+
+    private volatile boolean booted;
+    private volatile boolean running;
+    private volatile Thread mainThread;
+    private ThreadPools pools;
+    private long tickStartNanos;
+
+    private AutoThreadRuntime() {
+    }
+
+    public static AutoThreadRuntime get() {
+        return INSTANCE;
+    }
+
+    /**
+     * Initializes the runtime. Safe to call twice; the second call is ignored.
+     *
+     * <p>Called from the server thread early during boot, before worlds are loaded, so that pool
+     * sizing and metrics are available to everything that comes after.
+     */
+    public synchronized void boot() {
+        if (booted) {
+            return;
+        }
+        mainThread = Thread.currentThread();
+        GammaConfig.ensureLoaded();
+        pools = ThreadPools.initialize();
+        io.github.gammaengine.nativeengine.NativeEngine.get().load();
+        booted = true;
+
+        GammaEngine.LOGGER.info("{} AutoThread runtime ready ({}), simulation budget: {} worker(s) + main thread",
+                GammaEngine.NAME, CpuTopology.get(), pools.regionTick().threads());
+        if (!GammaConfig.configs.gamma_autothread_enabled) {
+            GammaEngine.LOGGER.warn("AutoThread parallelism is disabled in GammaEngine.yml: "
+                    + "the server will simulate on a single thread, like upstream Crucible.");
+        }
+    }
+
+    /** Called once the server finished loading worlds and is about to accept players. */
+    public void onServerStarted() {
+        running = true;
+        if (GammaConfig.configs.gamma_profiling_enabledAtStartup) {
+            GammaProfiler.get().startSession();
+            GammaEngine.LOGGER.info("Profiling session started automatically (gamma.profiling.enabledAtStartup)");
+        }
+    }
+
+    /** Called at the very beginning of {@code MinecraftServer.tick()}. */
+    public void onTickStart() {
+        tickStartNanos = System.nanoTime();
+    }
+
+    /** Called at the very end of {@code MinecraftServer.tick()}. */
+    public void onTickEnd() {
+        if (tickStartNanos == 0L) {
+            return;
+        }
+        long duration = System.nanoTime() - tickStartNanos;
+        tickStartNanos = 0L;
+        GammaProfiler profiler = GammaProfiler.get();
+        profiler.ticks().recordTick(duration);
+        profiler.record("server.tick", duration);
+    }
+
+    /** Called before the server saves and stops. */
+    public synchronized void shutdown() {
+        if (!booted) {
+            return;
+        }
+        running = false;
+        if (GammaProfiler.get().sessionActive()) {
+            String report = GammaProfiler.get().stopSession();
+            if (report != null) {
+                GammaProfiler.get().writeReport(report);
+            }
+        }
+        if (pools != null) {
+            pools.shutdown();
+        }
+        GammaEngine.LOGGER.info("{} AutoThread runtime stopped", GammaEngine.NAME);
+    }
+
+    public boolean isBooted() {
+        return booted;
+    }
+
+    public boolean isRunning() {
+        return running;
+    }
+
+    /** True when the calling thread is the Minecraft server thread. */
+    public boolean isMainThread() {
+        return Thread.currentThread() == mainThread;
+    }
+
+    public Thread mainThread() {
+        return mainThread;
+    }
+
+    public ThreadPools pools() {
+        return pools;
+    }
+
+    /** Whether the runtime is allowed to run world work in parallel at all. */
+    public boolean parallelismEnabled() {
+        return booted && GammaConfig.configs.gamma_autothread_enabled;
+    }
+
+    /** Multi-line status text used by {@code /autothread status}. */
+    public String statusText() {
+        StringBuilder out = new StringBuilder(512);
+        TickStatistics ticks = GammaProfiler.get().ticks();
+        out.append(GammaEngine.NAME).append(" AutoThread runtime\n");
+        out.append("  State: ").append(booted ? (running ? "running" : "booted") : "not booted")
+                .append(parallelismEnabled() ? "" : " (parallelism disabled in config)").append('\n');
+        out.append("  CPU: ").append(CpuTopology.get()).append('\n');
+        out.append(String.format("  TPS: %.2f / %.2f / %.2f (1m, 5m, 15m)%n",
+                ticks.tps1m(), ticks.tps5m(), ticks.tps15m()));
+        TickStatistics.Mspt mspt = ticks.mspt();
+        if (mspt != null) {
+            out.append("  MSPT: ").append(mspt).append('\n');
+        }
+        if (pools != null) {
+            out.append("  Pools:\n");
+            for (ManagedPool pool : pools.all()) {
+                out.append("    ").append(pool).append('\n');
+            }
+        }
+        return out.toString();
+    }
+}
