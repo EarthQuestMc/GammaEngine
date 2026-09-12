@@ -6,7 +6,7 @@
          if (args.length == 0) {
 -            sender.sendMessage("This server is running " + Bukkit.getName() + " version " + Bukkit.getVersion() + " (Implementing API version " + Bukkit.getBukkitVersion() + ")");
 +            sender.sendMessage(String.format(
-+                    "This server is running Crucible | https://github.com/CrucibleMC/Crucible | %s | %s",
++                    "This server is running GammaEngine | https://github.com/EarthQuestMc/GammaEngine | %s | %s",
 +                    Bukkit.getBukkitVersion(), Bukkit.getVersion()));
          } else {
 -            StringBuilder name = new StringBuilder();

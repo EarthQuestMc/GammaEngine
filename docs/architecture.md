@@ -43,7 +43,7 @@ Implemented so far (phase 0 and 1):
 | --- | --- |
 | `GammaEngine` | Fork identity and shared logger |
 | `autothread.AutoThreadRuntime` | Lifecycle, main-thread identity, tick instrumentation, status |
-| `config.GammaConfig` | `GammaEngine.yml`: resource limits and diagnostics only |
+| `config.GammaConfig` | `GammaAutoThread.yml`: resource limits and diagnostics only |
 | `platform.CpuTopology` | Physical cores vs SMT siblings, NUMA package count |
 | `concurrent.ThreadPools` | The pools and the rules that size them |
 | `concurrent.ManagedPool` | Instrumented, resizable pool: queue wait, execution time, depth |

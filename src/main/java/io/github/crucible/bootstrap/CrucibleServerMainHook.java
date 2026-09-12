@@ -28,7 +28,7 @@ public class CrucibleServerMainHook {
     public static final PrintStream originalErr = System.err;
 
     public static void relaunchMain(String[] args) throws Exception {
-        System.out.println("[Crucible] Running pre-launch tweaks");
+        System.out.println("[GammaEngine] Running pre-launch tweaks");
 
         File injectFile = new File("inject.properties");
         if (!injectFile.exists()) {
@@ -56,10 +56,10 @@ public class CrucibleServerMainHook {
 
         if (!verifyLibraries()) {
             setupLibraries();
-            System.out.println("[Crucible] Crucible installed! A restart is required to be able to boot.");
+            System.out.println("[GammaEngine] GammaEngine installed! A restart is required to be able to boot.");
             System.exit(0);
         } else {
-            System.out.println("[Crucible] Everything in check, booting the server");
+            System.out.println("[GammaEngine] Everything in check, booting the server");
         }
     }
 
@@ -71,7 +71,7 @@ public class CrucibleServerMainHook {
 
     private static boolean verifyLibraries() throws IOException, NoSuchAlgorithmException {
         if (Boolean.parseBoolean(System.getProperty("crucible.skipLibraryVerification"))) {
-            System.out.println("[Crucible] Skipping library integrity verification");
+            System.out.println("[GammaEngine] Skipping library integrity verification");
             return true;
         }
         if (!Files.isDirectory(LIBRARY_ROOT)) {
@@ -81,7 +81,7 @@ public class CrucibleServerMainHook {
     }
 
     private static void setupLibraries() throws InterruptedException {
-        System.out.println("[Crucible] Setting up server libraries, it may take a few minutes");
+        System.out.println("[GammaEngine] Setting up server libraries, it may take a few minutes");
         if (Files.exists(LIBRARY_ROOT) && !Files.isDirectory(LIBRARY_ROOT)) {
             throw new IllegalStateException(String.format("Library root '%s' is a file, aborting startup!", LIBRARY_ROOT.toAbsolutePath()));
         }

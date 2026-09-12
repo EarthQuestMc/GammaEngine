@@ -58,7 +58,7 @@ public final class NativeEngine {
             return;
         }
         if (!GammaConfig.configs.gamma_native_enabled) {
-            status = "disabled in GammaEngine.yml";
+            status = "disabled in GammaAutoThread.yml";
             GammaEngine.LOGGER.info("Native engine disabled by configuration, using Java implementations");
             return;
         }

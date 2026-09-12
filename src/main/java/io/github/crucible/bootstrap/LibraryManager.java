@@ -172,7 +172,7 @@ public class LibraryManager {
             if (Files.isRegularFile(jarFile) && Files.isRegularFile(checksumFie)) {
                 String checksum = String.join("", Files.readAllLines(checksumFie));
                 if (checksum.equals("skip")) {
-                    System.out.println("[Crucible] Skipping verification of " + neededLibrary);
+                    System.out.println("[GammaEngine] Skipping verification of " + neededLibrary);
                     continue;
                 }
 

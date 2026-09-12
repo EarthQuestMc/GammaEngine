@@ -51,7 +51,7 @@ public class TimedTimings extends Thread{
     public static void scheduleTimedTimings(int waitSeconds){
         interruptCurrent();
         timedTimings = new TimedTimings(waitSeconds);
-        timedTimings.setName("Crucible Timed TimingsV2");
+        timedTimings.setName("GammaEngine Timed TimingsV2");
         timedTimings.setDaemon(true);
         timedTimings.start();
     }

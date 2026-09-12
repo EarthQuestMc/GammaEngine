@@ -1,4 +1,4 @@
-rootProject.name = 'Crucible'
+rootProject.name = 'GammaEngine'
 
 include ':eclipse:cauldron'
 include ':eclipse:Clean'

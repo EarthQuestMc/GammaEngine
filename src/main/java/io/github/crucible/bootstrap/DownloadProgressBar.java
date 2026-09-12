@@ -33,7 +33,7 @@ public class DownloadProgressBar extends Thread {
                 buffer.setLength(0); // Zeroing an array is faster than allocating a new one
                 clearLines(buffer, lines);
                 lines = 1; // Already counts the next line we are going to write
-                buffer.append(String.format("[Crucible] %s out of %s files downloaded\n", counter.get(), objectsToObserve.size()));
+                buffer.append(String.format("[GammaEngine] %s out of %s files downloaded\n", counter.get(), objectsToObserve.size()));
 
                 for (ProgressiveObject task : objectsToObserve) {
                     if (task.isInProgress()) {
@@ -65,12 +65,12 @@ public class DownloadProgressBar extends Thread {
             System.out.print(buffer);
         } else {
             int lastCount = 0;
-            System.out.printf("[Crucible] %s out of %s files downloaded\n", counter.get(), objectsToObserve.size());
+            System.out.printf("[GammaEngine] %s out of %s files downloaded\n", counter.get(), objectsToObserve.size());
             while (running.get()) {
                 try {
                     if (counter.get() > lastCount) {
                         lastCount = counter.get();
-                        System.out.printf("[Crucible] %s out of %s files downloaded\n", lastCount, objectsToObserve.size());
+                        System.out.printf("[GammaEngine] %s out of %s files downloaded\n", lastCount, objectsToObserve.size());
                     }
                     //noinspection BusyWait
                     Thread.sleep(500);  // Wait some time, we don't need to hammer the console

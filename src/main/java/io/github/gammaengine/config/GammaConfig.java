@@ -10,7 +10,7 @@ import io.github.gammaengine.GammaEngine;
 import java.io.File;
 
 /**
- * Administrator-facing configuration of the AutoThread runtime, stored in {@code GammaEngine.yml}.
+ * Administrator-facing configuration of the AutoThread runtime, stored in {@code GammaAutoThread.yml}.
  *
  * <p>The design rule of this file is that it contains resource limits and diagnostics switches,
  * and nothing else. There is deliberately no way to declare a mod thread-safe, to pin a plugin to
@@ -71,10 +71,10 @@ public class GammaConfig extends YamlConfig {
     public boolean gamma_native_enabled = true;
 
     private GammaConfig() {
-        CONFIG_FILE = new File("GammaEngine.yml");
+        CONFIG_FILE = new File("GammaAutoThread.yml");
         CONFIG_MODE = ConfigMode.PATH_BY_UNDERSCORE;
         CONFIG_HEADER = new String[]{
-                "GammaEngine configuration",
+                "GammaEngine AutoThread configuration",
                 "",
                 "This file only contains resource limits and diagnostics. The AutoThread runtime decides",
                 "by itself which mod, plugin, entity or tile entity code can run in parallel, by observing",
@@ -85,7 +85,7 @@ public class GammaConfig extends YamlConfig {
             init();
             save(); // rewrite the file so new options appear after an update
         } catch (InvalidConfigurationException e) {
-            GammaEngine.LOGGER.error("Failed to load GammaEngine.yml, falling back to defaults", e);
+            GammaEngine.LOGGER.error("Failed to load GammaAutoThread.yml, falling back to defaults", e);
         }
     }
 

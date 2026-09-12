@@ -11,6 +11,15 @@
  import org.bukkit.command.CommandException;
  import org.bukkit.command.CommandSender;
  import org.bukkit.command.ConsoleCommandSender;
+@@ -66,7 +70,7 @@
+         }
+ 
+         Bukkit.server = server;
+-        server.getLogger().info("This server is running " + getName() + " version " + getVersion() + " (Implementing API version " + getBukkitVersion() + ")");
++        server.getLogger().info("This server is running GammaEngine version " + getVersion() + " (Implementing API version " + getBukkitVersion() + ", server brand " + getName() + ")"); // GammaEngine - brand the banner, keep getName() as the legacy brand plugins detect
+     }
+ 
+     /**
 @@ -747,4 +751,12 @@
      public static UnsafeValues getUnsafe() {
          return server.getUnsafe();

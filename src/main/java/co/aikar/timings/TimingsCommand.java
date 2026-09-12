@@ -195,7 +195,7 @@ public class TimingsCommand extends BukkitCommand {
     }
 
     private void sendHelp(@NotNull CommandSender sender, @NotNull String currentAlias, @NotNull String[] args) {
-        sender.sendMessage(ChatColor.translateAlternateColorCodes('&',"&c&m-----------------&c( &aTimings V.2 &7&oCrucible &c)&m-----------------"));
+        sender.sendMessage(ChatColor.translateAlternateColorCodes('&',"&c&m-----------------&c( &aTimings V.2 &7&oGammaEngine &c)&m-----------------"));
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&',"&c  - &e" + currentAlias + " on &7- &aStart timings profiller."));
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&',"&c  - &e" + currentAlias + " paste &7- &aPaste current timings profiller."));
         sender.sendMessage(ChatColor.translateAlternateColorCodes('&',"&c  - &e" + currentAlias + " reset &7- &aReset current timings profiller."));

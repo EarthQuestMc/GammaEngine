@@ -65,7 +65,7 @@ public final class AutoThreadRuntime {
         GammaEngine.LOGGER.info("{} AutoThread runtime ready ({}), simulation budget: {} worker(s) + main thread",
                 GammaEngine.NAME, CpuTopology.get(), pools.regionTick().threads());
         if (!GammaConfig.configs.gamma_autothread_enabled) {
-            GammaEngine.LOGGER.warn("AutoThread parallelism is disabled in GammaEngine.yml: "
+            GammaEngine.LOGGER.warn("AutoThread parallelism is disabled in GammaAutoThread.yml: "
                     + "the server will simulate on a single thread, like upstream Crucible.");
         }
     }

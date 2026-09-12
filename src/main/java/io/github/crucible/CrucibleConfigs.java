@@ -206,13 +206,14 @@ public class CrucibleConfigs extends YamlConfig {
 
     public int timings_historyLength = 3600;
 
-    public String timings_serverName = "Crucible Server";
+    public String timings_serverName = "GammaEngine Server";
 
     @Comment("Enums to make extensible at runtime")
     public List<String> lwjgl3ify_extensibleEnums = new ArrayList<>(Arrays.asList(Lwjgl3ifyGlue.DEFAULT_EXTENSIBLE_ENUMS));
 
     private CrucibleConfigs() {
-        CONFIG_FILE = new File("Crucible.yml");
+        CONFIG_FILE = new File("Gamma.yml");
+        migrateLegacyFile();
         CONFIG_MODE = ConfigMode.PATH_BY_UNDERSCORE;
 
         try {
@@ -220,6 +221,28 @@ public class CrucibleConfigs extends YamlConfig {
             save(); //Update old configs.
         } catch (InvalidConfigurationException e) {
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * Carries an existing {@code Crucible.yml} over to {@code Gamma.yml} the first time this fork
+     * starts on a server that used to run Crucible.
+     *
+     * <p>The option keys are unchanged, so the copy is byte-for-byte: an administrator upgrading
+     * keeps every setting, and the old file is left untouched in case they want to roll back.
+     */
+    private void migrateLegacyFile() {
+        File legacy = new File("Crucible.yml");
+        if (!legacy.isFile() || CONFIG_FILE.isFile()) {
+            return;
+        }
+        try {
+            java.nio.file.Files.copy(legacy.toPath(), CONFIG_FILE.toPath());
+            System.out.println("[GammaEngine] Migrated Crucible.yml to " + CONFIG_FILE.getName()
+                    + "; the original file was left in place and is no longer read.");
+        } catch (java.io.IOException e) {
+            System.out.println("[GammaEngine] Could not migrate Crucible.yml to " + CONFIG_FILE.getName()
+                    + " (" + e.getMessage() + "), starting from defaults.");
         }
     }
 

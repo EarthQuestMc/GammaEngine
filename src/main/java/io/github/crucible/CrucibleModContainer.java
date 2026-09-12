@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
 
 @SuppressWarnings("UnstableApiUsage")
 public class CrucibleModContainer extends DummyModContainer implements Plugin {
-    public static final Logger logger = LogManager.getLogger("Crucible");
+    public static final Logger logger = LogManager.getLogger("GammaEngine");
     public static CrucibleModContainer instance;
     public static Metrics metrics;
     private PluginLoader dummyPluginLoader;
@@ -46,13 +46,16 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
     public CrucibleModContainer() {
         super(new ModMetadata());
         ModMetadata meta = getMetadata();
+        // The mod id stays "Crucible" on purpose: companion mods and plugins detect this server
+        // with Loader.isModLoaded("Crucible"), and renaming the id would silently disable them.
+        // Everything an operator actually reads is branded GammaEngine.
         meta.modId = "Crucible";
-        meta.name = "Crucible Server";
+        meta.name = "GammaEngine";
         meta.version = CrucibleMetadata.CRUCIBLE_VERSION;
-        meta.credits = "TODO: Add credits";
+        meta.credits = "Fork of Crucible by the CrucibleMC team, itself a fork of Thermos";
         meta.authorList = Arrays.asList("juanmuscaria", "brunoxkk0", "evernife");
-        meta.description = "Pure black magic and gambiarras!";
-        meta.url = "https://github.com/CrucibleMC/Crucible";
+        meta.description = "Multi-core Forge + Bukkit server for 1.7.10, powered by the AutoThread runtime";
+        meta.url = "https://github.com/EarthQuestMc/GammaEngine";
         instance = this;
     }
 
@@ -65,7 +68,7 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
     @Subscribe
     public void modConstruction(FMLConstructionEvent evt) {
         NetworkRegistry.INSTANCE.register(this, this.getClass(), "*", evt.getASMHarvestedData());
-        logger.info("Crucible DummyMod injected successfully!");
+        logger.info("GammaEngine DummyMod injected successfully!");
         configureTimings();
     }
 
@@ -86,7 +89,7 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
 
     @Subscribe
     public void serverStarting(FMLServerStartingEvent evt) {
-        evt.registerServerCommand("crucible", new CrucibleCommand(evt.getServer()));
+        evt.registerServerCommand("gamma", new CrucibleCommand(evt.getServer()));
         evt.registerServerCommand("autothread", new io.github.gammaengine.command.AutoThreadCommand()); // GammaEngine
         CrucibleAPI.registerModPlugin(this);
         metrics = new Metrics(this, 6555);
@@ -223,7 +226,7 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
 
     @Override
     public void onLoad() {
-        getLogger().info("Crucible DummyPlugin injected successfully!");
+        getLogger().info("GammaEngine DummyPlugin injected successfully!");
     }
 
     @Override

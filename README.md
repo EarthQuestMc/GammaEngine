@@ -1,58 +1,82 @@
-![](https://img.shields.io/github/v/release/CrucibleMC/Crucible?color=sucess&style=flat-square)
-![](https://img.shields.io/github/actions/workflow/status/CrucibleMC/Crucible/staging-build.yml?style=flat-square)
-![](https://img.shields.io/discord/682358465175355393?color=blue&label=Discord&logo=Discord&style=flat-square)
-![Crucible](logo.png)
-### What's Crucible?
+![GammaEngine](logo.png)
 
-Crucible, a fork of [Thermos](https://github.com/CyberdyneCC/Thermos),
-is a CraftBukkit and Forge server implementation for 1.7.10,
-providing the ability to load both Forge mods and Bukkit plugins alongside each other.
+# GammaEngine
 
-We aim to close the gaps left by Thermos and extend the support for those still using 1.7.10 by adding support for long
-broken mods and plugins and fix serious bugs as they appear.
+GammaEngine is a Minecraft **1.7.10** server that runs Forge mods and Bukkit plugins side by side,
+and that actually uses several physical CPU cores to simulate the world.
 
-Advantages over Thermos:
-+ Working/stable build across systems
-+ Several bugfixes
-+ Performance improvements
-+ Updated libraries for newer plugin support
-* Implemented TimingsV2
-* Java 8–21 supported (using an integrated version of [lwjgl3ify](https://github.com/GTNewHorizons/lwjgl3ify))
-+ Backported Bukkit APIs (With some APIs requiring the companion mod [NecroTempus](https://github.com/CrucibleMC/NecroTempus))
-+ You can see more changes in the [releases](https://github.com/CrucibleMC/Crucible/releases) changelog.
+It is a fork of [Crucible](https://github.com/CrucibleMC/Crucible), which is itself a fork of
+Thermos. Everything Crucible supports keeps working: the same mods, the same plugins, the same
+worlds, the same save format, the same 1.7.10 protocol.
 
-## Build Requirements
-* Java 8 JDK
-* `JAVA_HOME` defined on your OS
+What GammaEngine adds is the **AutoThread runtime**.
 
-## Setup the Workspace
-* Checkout project
-  * You can use IDE or clone from console:
-  `git clone https://github.com/CrucibleMC/Crucible.git`
-* Creating the workspace
-  * To create the workspace just run the command: `./gradlew setupCrucible`
-  * To create the patches with the changes made just run: `./gradlew genPatches`
-* Building
-  * Before you can build you must first setup the workspace!
-  * To build the distribution packages run the command: `./gradlew buildPackages`
-  * The distribution package will be in `build/distributions`
-* Updating sources
-  * Update sources: `git pull origin master`
-  * Recreate the workspace: `./gradlew clean setupCrucible`
+## AutoThread in one paragraph
 
-## Useful links
-+ [Crucible Documentation](https://cruciblemc.github.io/docs/) - Place for everything about crucible.
-+ [Discord](https://discord.gg/jWSTJ4d) - Join our support discord if you need help with server setup, or if you just want to hang out.
+The server decides by itself what can run in parallel. There is no threading mode to choose, no
+`legacy` / `hybrid` / `regionized` switch, and nothing for a mod or plugin author to declare. The
+runtime watches what code actually touches at runtime, splits the loaded world into regions that do
+not interact, ticks independent regions at the same time, and serializes anything it has not proven
+safe. When a component misbehaves it loses parallelism at the finest possible granularity, one
+class or one object, never a whole mod.
+
+Priority order, and it is not negotiable: world integrity, no silent corruption, compatibility,
+stability, then performance.
+
+## Status
+
+Early development. The runtime, its metrics and the native library are in place; region-parallel
+simulation is being built on top of them. See [docs/roadmap.md](docs/roadmap.md) for the phase by
+phase plan and where the project currently stands.
+
+## Requirements
+
+* Java 8 through 21 (lwjgl3ify is embedded, as in Crucible)
+* Forge 1.7.10-10.13.4.1614, Bukkit API 1.7.10-R0.1-SNAPSHOT
+
+## Running
+
+```bash
+java -Xms4G -Xmx8G -jar GammaEngine-1.7.10-<version>-server.jar nogui
+```
+
+The first launch installs the server libraries and asks for a restart. On Java 9 or newer, add the
+flags from `java9args.txt`.
+
+Configuration files, all optional:
+
+| File | Contents |
+| --- | --- |
+| `Gamma.yml` | General server settings, migrated automatically from `Crucible.yml` |
+| `GammaAutoThread.yml` | AutoThread resource limits and diagnostics. No per-mod options, by design |
+
+Commands: `/gamma` (alias `/crucible`) for server information, `/autothread` for runtime status,
+worker occupancy, conflicts and profiling.
+
+## Building
+
+See [docs/build.md](docs/build.md). Short version:
+
+```bash
+./gradlew setupCrucible     # once, creates the patched workspace
+./gradlew buildPackages     # server jar in build/distributions/
+cd native && cargo build --release   # optional native acceleration
+```
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [docs/roadmap.md](docs/roadmap.md) | The phases, what each one does, and current status |
+| [docs/architecture.md](docs/architecture.md) | Subsystems and the tick paths they take over |
+| [docs/threading-model.md](docs/threading-model.md) | Ownership, access rules, locking, the contract |
+| [docs/native-engine.md](docs/native-engine.md) | The Rust library, what it accelerates, measured results |
+| [docs/build.md](docs/build.md) | Reproducible build |
 
 ## Credits
-* [Thermos](https://github.com/CyberdyneCC/Thermos) - Original project
-* [Spigot](https://hub.spigotmc.org/stash/projects/SPIGOT/repos/spigot/browse) - Several improvements over Bukkit
-* [Paper](https://github.com/PaperMC/Paper) - Several improvements over Spigot
-* [lwjgl3ify](https://github.com/GTNewHorizons/lwjgl3ify) - Java 9+ support
 
-## Special Thanks To
-
-### JetBrains
-[<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png" alt="JetBrains Logo (Main) logo." width="100">](https://www.jetbrains.com)
-
-For supporting Crucible development with access to their [Open Source License](https://jb.gg/OpenSourceSupport).
+* [Crucible](https://github.com/CrucibleMC/Crucible) — upstream project
+* [Thermos](https://github.com/CyberdyneCC/Thermos) — Crucible's own upstream
+* [Spigot](https://hub.spigotmc.org/stash/projects/SPIGOT/repos/spigot/browse) and
+  [Paper](https://github.com/PaperMC/Paper) — many improvements over Bukkit
+* [lwjgl3ify](https://github.com/GTNewHorizons/lwjgl3ify) — Java 9+ support

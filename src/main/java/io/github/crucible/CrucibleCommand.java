@@ -29,25 +29,28 @@ public class CrucibleCommand extends Command {
     private static WeakReference<MinecraftServer> serveReference;
 
     protected CrucibleCommand(MinecraftServer server) {
-        super("crucible");
+        super("gamma");
         serveReference = new WeakReference<>(server);
+        // "crucible" stays as an alias so existing operator scripts and command blocks keep working.
+        setAliases(java.util.Collections.singletonList("crucible"));
 
-        String usage = "&7&m-------------------&7[&bCrucible&7]&m-------------------\n" +
-          "&b  >&e crucible tps &7-&a Show tps statistics.\n" +
-          "&b  >&e crucible restart &7-&a Restart the server.\n" +
-          "&b  >&e crucible info &7-&a Print some information about the server.\n" +
-          "&b  >&e crucible chunks &7-&a Print some information about loaded chunks.\n" +
-          "&b  >&e crucible heap &7-&a Dump the server heap.\n" +
-          "&b  >&e crucible plugins &7-&a Shows all your loaded plugins and mod plugins.\n" +
-          "&b  >&e crucible mods &7-&a Shows all your loaded mods.\n" +
-          "&b  >&e crucible findChunks &7-&a Find and filter *loaded* chunks by their content.";
+        String usage = "&7&m-------------------&7[&bGammaEngine&7]&m-------------------\n" +
+          "&b  >&e gamma tps &7-&a Show tps statistics.\n" +
+          "&b  >&e gamma restart &7-&a Restart the server.\n" +
+          "&b  >&e gamma info &7-&a Print some information about the server.\n" +
+          "&b  >&e gamma chunks &7-&a Print some information about loaded chunks.\n" +
+          "&b  >&e gamma heap &7-&a Dump the server heap.\n" +
+          "&b  >&e gamma plugins &7-&a Shows all your loaded plugins and mod plugins.\n" +
+          "&b  >&e gamma mods &7-&a Shows all your loaded mods.\n" +
+          "&b  >&e gamma findChunks &7-&a Find and filter *loaded* chunks by their content.\n" +
+          "&b  >&e autothread &7-&a AutoThread runtime status, workers and profiling.";
         setUsage(ChatColor.translateAlternateColorCodes('&', usage));
-        setPermission("crucible");
+        setPermission("gamma");
     }
 
     public static String generateInfo() {
-        String info = "This server is running &3Crucible&r [" + CrucibleModContainer.instance.getVersion() + "] (Thermos fork by CrucibleMC Team).\n" +
-          "&9https://github.com/CrucibleMC/Crucible\n&r" +
+        String info = "This server is running &3GammaEngine&r [" + CrucibleModContainer.instance.getVersion() + "] (Crucible fork, AutoThread runtime).\n" +
+          "&9https://github.com/EarthQuestMc/GammaEngine\n&r" +
           "Bukkit API implemented: 1.7.9-R0.3-SNAPSHOT\n" +
           "Plugins: " + Bukkit.getPluginManager().getPlugins().length + "\n&r" +
           "Mods: " + Loader.instance().getActiveModList().size() +
@@ -165,44 +168,44 @@ public class CrucibleCommand extends Command {
         if (!testPermission(sender))
             return true;
         if (args.length == 0) {
-            sender.sendMessage(ChatColor.BLUE + "[Crucible] " + ChatColor.GRAY + "Please specify action");
+            sender.sendMessage(ChatColor.BLUE + "[GammaEngine] " + ChatColor.GRAY + "Please specify action");
             sender.sendMessage(usageMessage);
             return true;
         }
         if (args[0].equalsIgnoreCase("tps")) {
-            if (!testPermission(sender, "crucible.tps"))
+            if (!testPermission(sender, "gamma.tps"))
                 return true;
             sender.sendMessage(getTps());
         } else if (args[0].equalsIgnoreCase("restart")) {
-            if (!testPermission(sender, "crucible.restart"))
+            if (!testPermission(sender, "gamma.restart"))
                 return true;
             RestartCommand.restart(true);
         } else if (args[0].equalsIgnoreCase("info")) {
-            if (!testPermission(sender, "crucible.info"))
+            if (!testPermission(sender, "gamma.info"))
                 return true;
             sender.sendMessage(generateInfo());
         } else if (args[0].equalsIgnoreCase("chunks")) {
-            if (!testPermission(sender, "crucible.chunks"))
+            if (!testPermission(sender, "gamma.chunks"))
                 return true;
             processChunks(sender, args);
         } else if (args[0].equalsIgnoreCase("heap")) {
-            if (!testPermission(sender, "crucible.heap"))
+            if (!testPermission(sender, "gamma.heap"))
                 return true;
             processHeap(sender, args);
         } else if (args[0].equalsIgnoreCase("mods")) {
-            if (!testPermission(sender, "crucible.mods"))
+            if (!testPermission(sender, "gamma.mods"))
                 return true;
             sender.sendMessage("Mods " + getModList());
         } else if (args[0].equalsIgnoreCase("plugins")) {
-            if (!testPermission(sender, "crucible.plugins"))
+            if (!testPermission(sender, "gamma.plugins"))
                 return true;
             sender.sendMessage("Plugins " + getPluginList());
         } else if (args[0].equalsIgnoreCase("findChunks")) {
-            if (!testPermission(sender, "crucible.findChunks"))
+            if (!testPermission(sender, "gamma.findChunks"))
                 return true;
             findChunks(sender, args);
         } else if (args[0].equalsIgnoreCase("")) {
-            if (!testPermission(sender, "crucible."))
+            if (!testPermission(sender, "gamma."))
                 return true;
         } else {
             sender.sendMessage(ChatColor.RED + "Unknown subcommand.");
@@ -218,13 +221,13 @@ public class CrucibleCommand extends Command {
             try {
                 id = Integer.parseInt(args[1]);
             } catch (NumberFormatException e) {
-                sender.sendMessage(ChatColor.BLUE + "[Crucible] " + ChatColor.DARK_RED + "World ID is not a valid number!");
+                sender.sendMessage(ChatColor.BLUE + "[GammaEngine] " + ChatColor.DARK_RED + "World ID is not a valid number!");
                 return;
             }
 
             world = DimensionManager.getWorld(id);
             if (world == null) {
-                sender.sendMessage(ChatColor.BLUE + "[Crucible] " + ChatColor.DARK_RED + "World not found!");
+                sender.sendMessage(ChatColor.BLUE + "[GammaEngine] " + ChatColor.DARK_RED + "World not found!");
                 return;
             }
         } else if (sender instanceof Player) {
@@ -246,7 +249,7 @@ public class CrucibleCommand extends Command {
         if (testPermissionSilent(target, permission)) {
             return true;
         }
-        target.sendMessage(ChatColor.BLUE + "[Crucible] " + ChatColor.DARK_RED + "I'm sorry, but you do not have permission to perform this command. Please contact the server administrators if you believe that this is an error.");
+        target.sendMessage(ChatColor.BLUE + "[GammaEngine] " + ChatColor.DARK_RED + "I'm sorry, but you do not have permission to perform this command. Please contact the server administrators if you believe that this is an error.");
         return false;
     }
 

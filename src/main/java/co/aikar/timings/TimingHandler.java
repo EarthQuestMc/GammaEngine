@@ -129,7 +129,7 @@ public class TimingHandler implements Timing {
             last.timingDepth = 0;
             String reportTo;
             if ("Minecraft".equalsIgnoreCase(last.identifier.group)) {
-                reportTo = "Crucible! This is a potential bug in Crucible";
+                reportTo = "GammaEngine! This is a potential bug in GammaEngine";
             } else {
                 reportTo = "the plugin " + last.identifier.group + "(Look for errors above this in the logs)";
             }
