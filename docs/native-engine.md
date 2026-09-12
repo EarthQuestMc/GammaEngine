@@ -1,85 +1,99 @@
-# Native engine (Rust)
+# Moteur natif (Rust)
 
-The native engine is an **optional** Rust library that accelerates a few batchable, CPU-bound
-operations. The server boots, runs and produces identical worlds without it. When
-`libgammaengine_native.so` (or `gammaengine_native.dll`) is missing, fails to load, or reports a
-different ABI version, the engine logs one line and uses the Java implementations.
+Le moteur natif est une bibliothèque Rust **optionnelle** qui accélère quelques opérations
+gourmandes en CPU et traitables par lots. Le serveur démarre, tourne et produit des mondes
+identiques sans elle. Quand `libgammaengine_native.so` (ou `gammaengine_native.dll`) est absente,
+échoue au chargement ou annonce une version d'ABI différente, le moteur écrit une ligne de log et
+utilise les implémentations Java.
 
-## What it accelerates, and why those things
+## Ce qu'il accélère, et pourquoi ces choses-là
 
-Rust is used where three conditions hold at once: the work is CPU-bound, it arrives in buffers big
-enough to amortise a JNI transition, and it touches no mutable world state. That rules out the tick
-loop, entities, tile entities, the Forge event bus and Bukkit, and it rules in:
+Rust est employé là où trois conditions sont réunies : le travail est limité par le CPU, il arrive
+par blocs assez gros pour amortir une transition JNI, et il ne touche aucun état mutable du monde.
+Cela exclut la boucle de tick, les entités, les TileEntities, le bus d'événements Forge et Bukkit,
+et cela inclut :
 
-| Operation | Where it is used | Status |
+| Opération | Où elle sert | État |
 | --- | --- | --- |
-| zlib compress | Writing a chunk into a region file | Implemented |
-| zlib decompress | Reading a chunk from a region file | Implemented |
-| XXH64 | Chunk snapshot hashing, world integrity and determinism checks | Implemented |
-| Region-file sector arithmetic and validation | Region file repair and allocation | Implemented (pure functions) |
-| NBT binary encode/decode | Chunk save/load pipeline | Planned |
-| Pathfinding on immutable snapshots | Mob AI, off the region thread | Planned, phase 10 |
-| Batch collision and spatial queries | Entity movement | Planned, phase 10 |
+| Compression zlib | Écriture d'un chunk dans un fichier region | Implémenté |
+| Décompression zlib | Lecture d'un chunk depuis un fichier region | Implémenté |
+| XXH64 | Hachage des snapshots de chunks, intégrité et déterminisme du monde | Implémenté |
+| Arithmétique et validation des secteurs de fichier region | Réparation et allocation de fichiers region | Implémenté (fonctions pures) |
+| Encodage et décodage binaire NBT | Pipeline de sauvegarde et chargement de chunks | Prévu |
+| Pathfinding sur snapshots immuables | IA des mobs, hors du thread de région | Prévu, phase 10 |
+| Collisions et recherches spatiales par lots | Déplacement des entités | Prévu, phase 10 |
 
-## Measured results
+## Résultats mesurés
 
-Reference payload: 200 000 bytes of chunk-shaped data (long runs of identical blocks broken by
-noisy regions). Median of 50 runs after 200 warm-up iterations, JNI transition and array copies
-included. Machine: development workstation, not the EPYC target; numbers are for the ratio, not the
-absolute value.
+Charge de référence : 200 000 octets de données en forme de chunk (longues suites de blocs
+identiques entrecoupées de zones bruitées). Médiane de 50 exécutions après 200 itérations de
+chauffe, transition JNI et copies de tableaux comprises. Machine : poste de développement, pas la
+cible EPYC ; les chiffres valent pour le rapport, pas pour la valeur absolue.
 
-| Operation | Java | Rust | Change |
+| Opération | Java | Rust | Écart |
 | --- | --- | --- | --- |
-| zlib compress (level 6) | 195 MiB/s | 265 MiB/s | +36% |
-| zlib decompress | 1010 MiB/s | 1544 MiB/s | +53% |
-| XXH64 | 4296 MiB/s | 7509 MiB/s | +75% |
-| Compressed size | 19 268 bytes | 18 806 bytes | −2.4% |
+| Compression zlib niveau 6 | 195 Mio/s | 265 Mio/s | +36 % |
+| Décompression zlib | 1010 Mio/s | 1544 Mio/s | +53 % |
+| XXH64 | 4296 Mio/s | 7509 Mio/s | +75 % |
+| Taille compressée | 19 268 o | 18 806 o | −2,4 % |
 
-Reproduce with:
+Le même banc mesure aussi le coût du niveau de compression, qui commande le budget de streaming de
+chunks analysé dans [scaling.md](scaling.md) :
+
+| Niveau deflate | Débit Java | Taille de sortie |
+| --- | --- | --- |
+| 1 | 462 Mio/s | 19 989 o |
+| 4 (paquets de chunks) | 272 Mio/s | 19 283 o |
+| 6 (fichiers region) | 196 Mio/s | 19 268 o |
+
+Pour reproduire :
 
 ```bash
 cd native && cargo build --release && cd ..
 ./gradlew :eclipse:cauldron:test --tests '*NativeEngineTest*'
-# results in eclipse/cauldron/build/test-results/test/TEST-*NativeEngineTest.xml
+# résultats dans eclipse/cauldron/build/test-results/test/TEST-*NativeEngineTest.xml
 ```
 
-A future acceleration that does not beat Java on this harness does not get merged.
+Une future accélération qui ne bat pas Java sur ce banc n'est pas intégrée.
 
-## Safety rules
+## Règles de sûreté
 
-* **No panic crosses the boundary.** Every exported function wraps its body in `catch_unwind` and
-  returns a null array (or 0) on failure. The Java side treats that as "use Java", counts it, and
-  continues.
-* **No small calls.** Buffers below 4 KiB stay in Java: the transition and the two array copies cost
-  more than they save. The threshold lives in `NativeEngine.MIN_NATIVE_BYTES`.
-* **One façade.** `NativeBindings` holds every `native` declaration and is package-private;
-  `NativeEngine` is the only caller and owns the fallback, the metrics and the ABI check.
-* **ABI versioning.** `ABI_VERSION` exists in both `native/src/lib.rs` and `NativeEngine`. A
-  mismatch disables native acceleration with a warning instead of failing mysteriously later.
-* **Same results, not same bytes.** Java's `Deflater` and the Rust encoder emit different but
-  equally valid zlib streams. Region files stay readable by vanilla, Forge and external tools
-  because both are valid zlib; what the tests pin down is that each side reads the other's output
-  and that the decompressed content and its hash are identical. World hashes are therefore always
-  computed on decompressed content, never on compressed bytes.
+* **Aucun panic ne franchit la frontière.** Chaque fonction exportée enveloppe son corps dans
+  `catch_unwind` et renvoie un tableau nul (ou 0) en cas d'échec. Le côté Java interprète cela comme
+  « utiliser Java », le compte, et continue.
+* **Pas de petits appels.** Les tampons de moins de 4 Kio restent en Java : la transition et les deux
+  copies de tableau coûtent plus cher que ce qu'elles économisent. Le seuil est
+  `NativeEngine.MIN_NATIVE_BYTES`.
+* **Une seule façade.** `NativeBindings` contient toutes les déclarations `native` et n'est pas
+  publique ; `NativeEngine` est le seul appelant et détient le repli, les métriques et le contrôle
+  d'ABI.
+* **Versionnage d'ABI.** `ABI_VERSION` existe dans `native/src/lib.rs` et dans `NativeEngine`. Un
+  écart désactive l'accélération native avec un avertissement, au lieu d'échouer mystérieusement
+  plus tard.
+* **Mêmes résultats, pas mêmes octets.** Le `Deflater` de Java et l'encodeur Rust produisent des flux
+  zlib différents mais également valides. Les fichiers region restent lisibles par le client
+  vanilla, par Forge et par les outils externes puisque les deux flux sont du zlib valide ; ce que
+  les tests garantissent, c'est que chaque côté lit la sortie de l'autre et que le contenu
+  décompressé et son hash sont identiques. Les hashes de monde sont donc toujours calculés sur le
+  contenu décompressé, jamais sur les octets compressés.
 
-## Building
+## Compilation
 
 ```bash
 cd native
-cargo test            # 17 unit tests, including a cross-check against an independent XXH64
-cargo build --release # target/release/libgammaengine_native.so (or .dll)
+cargo test            # 17 tests unitaires, dont un recoupement XXH64 avec une implémentation indépendante
+cargo build --release # target/release/libgammaengine_native.so (ou .dll)
 ```
 
-Install it where the server can find it, in order of precedence:
+Installer la bibliothèque là où le serveur la trouvera, par ordre de priorité :
 
-1. `-Dgammaengine.nativeLibrary=/absolute/path/to/libgammaengine_native.so`
-2. anywhere on `java.library.path`
-3. `gammaengine/native/libgammaengine_native.so` next to the server jar
+1. `-Dgammaengine.nativeLibrary=/chemin/absolu/vers/libgammaengine_native.so`
+2. n'importe où sur `java.library.path`
+3. `gammaengine/native/libgammaengine_native.so` à côté du jar du serveur
 
-## Metrics
+## Métriques
 
-`/autothread native` reports whether the library is loaded and where from. The profiler records
-`native.compress`, `native.decompress`, `native.hash`, the Java counterparts under
-`native.*.java`, and the counters `native.jni.calls`, `native.jni.bytes` and
-`native.fallback.*`. A rising fallback counter means the native path is refusing work and should be
-investigated rather than ignored.
+`/autothread native` indique si la bibliothèque est chargée et d'où. Le profileur enregistre
+`native.compress`, `native.decompress`, `native.hash`, leurs équivalents Java sous `native.*.java`,
+et les compteurs `native.jni.calls`, `native.jni.bytes` et `native.fallback.*`. Un compteur de repli
+qui monte signifie que le chemin natif refuse du travail : cela s'analyse, cela ne s'ignore pas.

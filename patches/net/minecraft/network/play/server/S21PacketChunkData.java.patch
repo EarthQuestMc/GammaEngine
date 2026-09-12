@@ -1,15 +1,75 @@
 --- ../src-base/minecraft/net/minecraft/network/play/server/S21PacketChunkData.java
 +++ ../src-work/minecraft/net/minecraft/network/play/server/S21PacketChunkData.java
-@@ -45,7 +45,7 @@
+@@ -45,19 +45,52 @@
  
      private void deflate()
      {
 -        Deflater deflater = new Deflater(-1);
-+        Deflater deflater = new Deflater(4); // Spigot -1 -> 4
++        // GammaEngine start - compress into a per-thread scratch buffer and keep only the bytes we
++        // actually send. Vanilla sized the output buffer like the uncompressed chunk (~164 kB) and
++        // kept it as the payload for ~20 kB of compressed data, so every packet queued behind a slow
++        // client pinned eight times the memory it needed.
++        Deflater deflater = new Deflater(io.github.gammaengine.config.GammaConfig.chunkCompressionLevel());
          try
          {
              deflater.setInput(this.field_149278_f, 0, this.field_149278_f.length);
-@@ -198,8 +198,10 @@
+             deflater.finish();
+-            byte[] deflated = new byte[this.field_149278_f.length];
+-            this.field_149285_h = deflater.deflate(deflated);
+-            this.field_149281_e = deflated;
++            byte[] scratch = io.github.gammaengine.util.ScratchBuffers.get(this.field_149278_f.length + 1024);
++            int written = deflater.deflate(scratch);
++
++            if (deflater.finished())
++            {
++                this.field_149285_h = written;
++                this.field_149281_e = java.util.Arrays.copyOf(scratch, written);
++            }
++            else
++            {
++                // Deflate can expand pathological input. Vanilla truncated it here, which sends a
++                // corrupt chunk; finish into a growing buffer instead.
++                java.io.ByteArrayOutputStream overflow = new java.io.ByteArrayOutputStream(written + 8192);
++                overflow.write(scratch, 0, written);
++                byte[] block = new byte[8192];
++
++                while (!deflater.finished())
++                {
++                    int produced = deflater.deflate(block);
++
++                    if (produced == 0)
++                    {
++                        break;
++                    }
++
++                    overflow.write(block, 0, produced);
++                }
++
++                this.field_149281_e = overflow.toByteArray();
++                this.field_149285_h = this.field_149281_e.length;
++            }
+         }
+         finally
+         {
+             deflater.end();
+         }
++        // GammaEngine end
+     }
+ 
+     public static int func_149275_c()
+@@ -158,7 +191,10 @@
+         ExtendedBlockStorage[] aextendedblockstorage = p_149269_0_.getBlockStorageArray();
+         int k = 0;
+         S21PacketChunkData.Extracted extracted = new S21PacketChunkData.Extracted();
+-        byte[] abyte = field_149286_i;
++        // GammaEngine - vanilla extracted every chunk through one static 196 kB buffer, which is a
++        // silent data race as soon as two threads build a chunk packet at the same time. A per-thread
++        // scratch buffer costs the same and is a prerequisite for sending chunks off the tick thread.
++        byte[] abyte = io.github.gammaengine.util.ScratchBuffers.get(func_149275_c());
+ 
+         if (p_149269_1_)
+         {
+@@ -198,8 +234,10 @@
              if (aextendedblockstorage[l] != null && (!p_149269_1_ || !aextendedblockstorage[l].isEmpty()) && (p_149269_2_ & 1 << l) != 0)
              {
                  nibblearray = aextendedblockstorage[l].getMetadataArray();
@@ -22,7 +82,7 @@
              }
          }
  
-@@ -208,8 +210,10 @@
+@@ -208,8 +246,10 @@
              if (aextendedblockstorage[l] != null && (!p_149269_1_ || !aextendedblockstorage[l].isEmpty()) && (p_149269_2_ & 1 << l) != 0)
              {
                  nibblearray = aextendedblockstorage[l].getBlocklightArray();
@@ -35,7 +95,7 @@
              }
          }
  
-@@ -220,8 +224,10 @@
+@@ -220,8 +260,10 @@
                  if (aextendedblockstorage[l] != null && (!p_149269_1_ || !aextendedblockstorage[l].isEmpty()) && (p_149269_2_ & 1 << l) != 0)
                  {
                      nibblearray = aextendedblockstorage[l].getSkylightArray();
@@ -48,7 +108,7 @@
                  }
              }
          }
-@@ -233,8 +239,10 @@
+@@ -233,8 +275,10 @@
                  if (aextendedblockstorage[l] != null && (!p_149269_1_ || !aextendedblockstorage[l].isEmpty()) && aextendedblockstorage[l].getBlockMSBArray() != null && (p_149269_2_ & 1 << l) != 0)
                  {
                      nibblearray = aextendedblockstorage[l].getBlockMSBArray();

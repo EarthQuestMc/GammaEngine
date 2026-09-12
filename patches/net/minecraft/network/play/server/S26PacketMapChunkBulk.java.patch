@@ -1,6 +1,6 @@
 --- ../src-base/minecraft/net/minecraft/network/play/server/S26PacketMapChunkBulk.java
 +++ ../src-work/minecraft/net/minecraft/network/play/server/S26PacketMapChunkBulk.java
-@@ -24,10 +24,18 @@
+@@ -24,10 +24,19 @@
      private byte[][] field_149260_f;
      private int field_149261_g;
      private boolean field_149267_h;
@@ -8,7 +8,8 @@
 -    private static final String __OBFID = "CL_00001306";
 -    private int maxLen = 0;
 -    private Semaphore deflateGate;
-+    private byte[] field_149268_i = new byte[0]; // CraftBukkit - remove static
++    private static final byte[] EMPTY_PAYLOAD = new byte[0]; // GammaEngine
++    private byte[] field_149268_i = EMPTY_PAYLOAD; // CraftBukkit - remove static
 +    // CraftBukkit start
 +    static final ThreadLocal<Deflater> localDeflater = new ThreadLocal<Deflater>()
 +    {
@@ -23,7 +24,7 @@
  
      public S26PacketMapChunkBulk() {}
  
-@@ -46,6 +54,15 @@
+@@ -46,6 +55,15 @@
          {
              Chunk chunk = (Chunk)p_i45197_1_.get(k);
              S21PacketChunkData.Extracted extracted = S21PacketChunkData.func_149269_a(chunk, true, 65535);
@@ -39,65 +40,96 @@
              j += extracted.field_150282_a.length;
              this.field_149266_a[k] = chunk.xPosition;
              this.field_149264_b[k] = chunk.zPosition;
-@@ -53,34 +70,36 @@
+@@ -53,34 +71,71 @@
              this.field_149262_d[k] = extracted.field_150281_c;
              this.field_149260_f[k] = extracted.field_150282_a;
          }
 -        this.deflateGate = new Semaphore(1);
 -        maxLen = j;
--    }
--
--    private void deflate()
--    {
--        byte[] data = new byte[maxLen];
--        int offset = 0;
--        for (int x = 0; x < field_149260_f.length; x++)
--        {
--            System.arraycopy(field_149260_f[x], 0, data, offset, field_149260_f[x].length);
--            offset += field_149260_f[x].length;
--        }
 +        /* CraftBukkit start - Moved to compress()
-         Deflater deflater = new Deflater(-1);
- 
--        try
--        {
--            deflater.setInput(data, 0, data.length);
++        Deflater deflater = new Deflater(-1);
++
 +        try {
 +            deflater.setInput(buildBuffer, 0, j);
-             deflater.finish();
--            byte[] deflated = new byte[data.length];
--            this.field_149261_g = deflater.deflate(deflated);
--            this.field_149263_e = deflated;
++            deflater.finish();
 +            this.buffer = new byte[j];
 +            this.size = deflater.deflate(this.buffer);
 +        } finally {
 +            deflater.end();
-         }
--        finally
++        }
 +        */
-+    }
-+
+     }
+ 
+-    private void deflate()
 +    // Add compression method
 +    public void compress()
-+    {
+     {
+-        byte[] data = new byte[maxLen];
+-        int offset = 0;
+-        for (int x = 0; x < field_149260_f.length; x++)
 +        if (this.field_149263_e != null)
          {
--            deflater.end();
+-            System.arraycopy(field_149260_f[x], 0, data, offset, field_149260_f[x].length);
+-            offset += field_149260_f[x].length;
 +            return;
          }
-+
+-        Deflater deflater = new Deflater(-1);
+ 
+-        try
++        // GammaEngine start - compress into a per-thread scratch buffer, keep only the compressed
++        // bytes, and drop the concatenated uncompressed buffer. A bulk packet used to hold the
++        // uncompressed data twice plus an output buffer sized like the input, which is several
++        // megabytes per packet in flight.
 +        Deflater deflater = localDeflater.get();
 +        deflater.reset();
++        deflater.setLevel(io.github.gammaengine.config.GammaConfig.chunkCompressionLevel());
 +        deflater.setInput(this.field_149268_i);
 +        deflater.finish();
-+        this.field_149263_e = new byte[this.field_149268_i.length + 100];
-+        this.field_149261_g = deflater.deflate(this.field_149263_e);
++        byte[] scratch = io.github.gammaengine.util.ScratchBuffers.get(this.field_149268_i.length + 1024);
++        int written = deflater.deflate(scratch);
++
++        if (deflater.finished())
+         {
+-            deflater.setInput(data, 0, data.length);
+-            deflater.finish();
+-            byte[] deflated = new byte[data.length];
+-            this.field_149261_g = deflater.deflate(deflated);
+-            this.field_149263_e = deflated;
++            this.field_149261_g = written;
++            this.field_149263_e = java.util.Arrays.copyOf(scratch, written);
+         }
+-        finally
++        else
+         {
+-            deflater.end();
++            java.io.ByteArrayOutputStream overflow = new java.io.ByteArrayOutputStream(written + 8192);
++            overflow.write(scratch, 0, written);
++            byte[] block = new byte[8192];
++
++            while (!deflater.finished())
++            {
++                int produced = deflater.deflate(block);
++
++                if (produced == 0)
++                {
++                    break;
++                }
++
++                overflow.write(block, 0, produced);
++            }
++
++            this.field_149263_e = overflow.toByteArray();
++            this.field_149261_g = this.field_149263_e.length;
+         }
++
++        this.field_149268_i = EMPTY_PAYLOAD;
++        // GammaEngine end
      }
 +    // CraftBukkit end
  
      public static int func_149258_c()
      {
-@@ -155,16 +174,7 @@
+@@ -155,16 +210,7 @@
  
      public void writePacketData(PacketBuffer p_148840_1_) throws IOException
      {

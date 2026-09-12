@@ -1,295 +1,448 @@
-# GammaEngine roadmap
+# Feuille de route GammaEngine
 
-This is the working plan and the progress tracker. It says what each phase does, how it is carried
-out, how we decide it is finished, and where the project stands right now.
+Ce document est à la fois le plan de travail et le suivi d'avancement. Il dit ce que fait chaque
+phase, comment elle se déroule, à quoi on reconnaît qu'elle est terminée, et où en est le projet.
 
-## Where we are
+## Où on en est
 
-| Phase | Subject | State |
+| Phase | Sujet | État |
 | --- | --- | --- |
-| 0 | Build, baseline, metrics | **Done** |
-| 1 | Optimise existing paths, threading model untouched | **In progress** |
-| 2 | Chunk snapshots, async load and save | Not started |
-| 3 | Regions: ownership and context, tracing only | Not started |
-| 4 | Access tracking, conflict detection, dependency graph | Not started |
-| 5 | Region scheduler, first parallel ticks | Not started |
-| 6 | Entity scheduler, cross-region transactions | Not started |
-| 7 | Bytecode instrumentation of mods and plugins | Not started |
-| 8 | Auto-quarantine and auto-learning | Not started |
-| 9 | Native Rust library | **Priority 1 done**, priority 2 pending |
-| 10 | Pathfinding, lighting, collisions, modded networks | Not started |
+| 0 | Build, référence, métriques | **Terminée** |
+| 1 | Optimiser les chemins existants sans toucher au threading | **En cours** |
+| 2 | Snapshots de chunks, chargement et sauvegarde asynchrones | À faire |
+| 2B | Passage à l'échelle joueurs : tracking, streaming de chunks, sauvegarde étalée | À faire |
+| 3 | Régions : propriété et contexte, traçage seul | À faire |
+| 4 | Suivi des accès, détection de conflits, graphe de dépendances | À faire |
+| 5 | Ordonnanceur de régions, premiers ticks parallèles | À faire |
+| 6 | Ordonnanceur d'entités, transactions inter-régions | À faire |
+| 6B | Plugins, commandes et API en multithread | À faire |
+| 7 | Instrumentation bytecode des mods et plugins | À faire |
+| 8 | Auto-quarantaine et apprentissage | À faire |
+| 9 | Bibliothèque native Rust | **Priorité 1 faite**, priorité 2 en attente |
+| 10 | Pathfinding, lighting, collisions, réseaux moddés | À faire |
+| 11 | Dégradation adaptative et comptabilité des coûts | À faire |
 
-Phase 9 was started early, out of order, because the compression and hashing work it contains has
-no dependency on the threading model and because the measurement harness it needs was already
-built in phase 0.
+La phase 9 a été commencée hors ordre parce que la compression et le hachage qu'elle contient ne
+dépendent pas du modèle de threading, et parce que le banc de mesure dont elle a besoin existait
+déjà depuis la phase 0.
 
-## How this plan was built
+Les phases 2B et 11 ont été ajoutées après l'analyse de [scaling.md](scaling.md), qui montre que
+les premiers murs à 400 joueurs ne sont pas dans la boucle de tick : le tracking d'entités et le
+streaming de chunks croissent plus vite que le nombre de joueurs, et la sauvegarde automatique
+écrit tous les chunks modifiés sur le thread serveur. Ce sont des problèmes algorithmiques, ils ne
+demandent pas le modèle de régions, et ils doivent être réglés avant que le parallélisme puisse
+montrer sa vraie valeur.
 
-Three constraints shaped the order.
+## Comment ce plan a été construit
 
-**Measure before changing.** A multithreaded server is a machine for producing heisenbugs. Without
-a baseline and per-subsystem metrics, every later change is an opinion. So phase 0 builds the
-instruments, and every phase after it must show its numbers.
+Trois contraintes ont fixé l'ordre.
 
-**Correctness infrastructure before parallelism.** Ownership, access tracking and conflict
-detection are useless on their own, but running them for a while in a single-threaded server is how
-we learn what mods really touch, with zero risk. Phases 3 and 4 therefore ship *before* anything
-runs in parallel, and they ship switched on. When phase 5 finally ticks two regions at once, the
-detector that would catch the mistake is already in production and already trusted.
+**Mesurer avant de changer.** Un serveur multithreadé est une machine à produire des bugs
+impossibles à reproduire. Sans référence et sans métriques par sous-système, chaque modification
+ultérieure n'est qu'une opinion. La phase 0 construit donc les instruments, et chaque phase
+suivante doit montrer ses chiffres.
 
-**Cheapest reversible work first.** Phases 1 and 2 give real gains without touching the threading
-model, which means they can be validated with ordinary testing and reverted independently. The
-risky work comes after, on a codebase that is already faster and already instrumented.
+**L'infrastructure de correction avant le parallélisme.** La propriété des objets, le suivi des
+accès et la détection de conflits ne servent à rien seuls, mais les faire tourner un moment sur un
+serveur monothread est la seule façon d'apprendre ce que les mods touchent vraiment, avec un risque
+nul. Les phases 3 et 4 arrivent donc *avant* toute exécution parallèle, et elles arrivent activées.
+Quand la phase 5 tickera enfin deux régions en même temps, le détecteur qui attraperait l'erreur
+sera déjà en production et déjà éprouvé.
 
-Inside every phase the method is the same: read the code, write down the invariant that must hold,
-write or adapt the test, implement, compile, test, benchmark against the baseline, keep or revert.
-No phase is finished until the server boots, ticks and stops cleanly with the change in place.
+**Le travail le moins cher et le plus réversible d'abord.** Les phases 1, 2 et 2B apportent des
+gains réels sans toucher au modèle de threading, donc elles se valident avec des tests ordinaires et
+s'annulent indépendamment. Le travail risqué arrive ensuite, sur une base déjà plus rapide et déjà
+instrumentée.
+
+Dans chaque phase la méthode est la même : lire le code, écrire l'invariant qui doit tenir, écrire
+ou adapter le test, implémenter, compiler, tester, mesurer contre la référence, garder ou annuler.
+Une phase n'est pas finie tant que le serveur ne démarre pas, ne ticke pas et ne s'arrête pas
+proprement avec la modification en place.
 
 ---
 
-## Phase 0 — Build, baseline, metrics
+## Phase 0 — Build, référence, métriques
 
-**Done.**
+**Terminée.**
 
-Goal: be able to build the untouched server, run it, and measure it, before changing any behaviour.
+Objectif : savoir compiler le serveur non modifié, le lancer et le mesurer, avant de changer le
+moindre comportement.
 
-How it proceeded:
+Déroulé :
 
-1. Identified the exact versions in use: Minecraft 1.7.10, MCP 9.08, Forge 10.13.4.1614, Bukkit
-   1.7.10-R0.1-SNAPSHOT, Gradle 8.0, build JDK 8 with a Java 17 toolchain for `buildSrc`.
-2. Created the patched workspace with `setupCrucible` and built the unmodified server, to have a
-   reference artifact.
-3. Mapped the tick paths that later phases take over, and recorded them in
-   [architecture.md](architecture.md): server loop, server tick, per-world tick, entity tick, tile
-   entity tick, Forge event bus, Bukkit scheduler, chunk provider, chunk loader, region file.
-4. Built the measurement layer: latency histograms with p50/p95/p99, a metric registry, rolling TPS
-   and exact MSPT percentiles, profiling sessions that write a report file.
-5. Hooked the runtime into `MinecraftServer` at four points only: boot, server started, tick
-   start/end, shutdown.
-6. Booted a real server and recorded the baseline.
+1. Identification des versions exactes : Minecraft 1.7.10, MCP 9.08, Forge 10.13.4.1614, Bukkit
+   1.7.10-R0.1-SNAPSHOT, Gradle 8.0, JDK 8 pour le build avec une toolchain Java 17 pour `buildSrc`.
+2. Création du workspace patché avec `setupCrucible` et compilation du serveur non modifié, pour
+   disposer d'un artefact de référence.
+3. Cartographie des chemins de tick que les phases suivantes vont reprendre, consignée dans
+   [architecture.md](architecture.md) : boucle serveur, tick serveur, tick par monde, tick des
+   entités, tick des TileEntities, bus d'événements Forge, scheduler Bukkit, fournisseur de chunks,
+   chargeur de chunks, fichier region.
+4. Construction de la couche de mesure : histogrammes de latence avec p50/p95/p99, registre de
+   métriques, TPS glissant et percentiles MSPT exacts, sessions de profilage qui écrivent un
+   rapport sur disque.
+5. Branchement du runtime dans `MinecraftServer` en quatre points seulement : démarrage, serveur
+   démarré, début et fin de tick, arrêt.
+6. Démarrage d'un vrai serveur et enregistrement de la référence.
 
-Baseline, empty world, no mods, development machine:
+Référence, monde vide, sans mods, machine de développement :
 
-| Metric | Value |
+| Métrique | Valeur |
 | --- | --- |
-| TPS | 19.94 |
-| MSPT mean | 0.22 ms |
-| MSPT p99 | 0.62 ms |
-| Boot, world creation | 4.0 s |
-| Boot, existing world | 1.1 s |
+| TPS | 19,94 |
+| MSPT moyen | 0,22 ms |
+| MSPT p99 | 0,62 ms |
+| Démarrage, création du monde | 4,0 s |
+| Démarrage, monde existant | 1,1 s |
 
-Exit criteria, all met: reproducible build documented, server boots and stops cleanly, `/autothread`
-reports live numbers, unit tests green.
-
----
-
-## Phase 1 — Optimise existing paths
-
-**In progress.** The threading model is not touched in this phase: one simulation thread, same
-order of operations, same results.
-
-Goal: make the single-threaded server measurably faster, so that later parallel work starts from a
-clean base and so that the gains from parallelism can be told apart from the gains from ordinary
-optimisation.
-
-How it proceeds:
-
-1. Profile a loaded server and rank the hot paths by total cost, using the phase 0 report.
-2. Chunk IO first: today `AnvilChunkLoader.saveChunk` serialises and compresses on the calling
-   thread, and `RegionFile` synchronises around every read and write. Compression moves to the
-   worker pool, with the native library when present.
-3. Allocation pressure in the tick loops: temporary lists and maps in the entity and tile entity
-   loops, boxed coordinates, per-tick NBT objects. Replace only what the profiler shows, with
-   primitive collections that already ship with the server (fastutil, koloboke).
-4. Collection choices on hot structures: the entity and tile entity lists are scanned and mutated
-   every tick.
-5. Network: move packet compression off the tick, reuse buffers where it is provably safe, never
-   change the protocol.
-
-Method for each item: measure before, change, measure after, keep only if the gain is real and the
-behaviour is identical.
-
-Exit criteria: a documented before/after table per optimisation, no behaviour change, tests green,
-a world that is byte-identical after the same scenario.
+Critères de sortie, tous atteints : build reproductible documenté, serveur qui démarre et s'arrête
+proprement, `/autothread` qui affiche des chiffres réels, tests unitaires au vert.
 
 ---
 
-## Phase 2 — Chunk snapshots, async load and save
+## Phase 1 — Optimiser les chemins existants
 
-Goal: get disk work, compression and NBT off the simulation thread without ever serialising a
-chunk that another thread can mutate.
+**En cours.** Le modèle de threading n'est pas touché dans cette phase : un seul thread de
+simulation, le même ordre des opérations, les mêmes résultats.
 
-How it will proceed:
+Objectif : rendre le serveur monothread mesurablement plus rapide, pour que le travail parallèle
+démarre d'une base propre et pour qu'on puisse distinguer plus tard les gains du parallélisme de
+ceux de l'optimisation ordinaire.
 
-1. `ChunkSaveSnapshot`: an immutable, compact copy of everything a chunk save needs, taken on the
-   owning thread in the shortest possible window.
-2. `AsyncChunkSaver`: snapshot on the tick, then serialise, compress and write on the IO pool.
-3. `AsyncChunkLoader`: read, decompress and decode NBT off-thread; only the final commit into the
-   world happens on the owning thread.
-4. Keep Forge's existing `ChunkIOExecutor` working throughout; it is replaced, not bypassed.
+Déroulé :
 
-Exit criteria: worlds saved by the new path are readable by vanilla and by upstream Crucible; a
-crash during heavy save leaves a loadable world; measured reduction of the save spike in MSPT p99.
+1. Profiler un serveur chargé et classer les chemins chauds par coût total, avec le rapport de la
+   phase 0.
+2. Les entrées-sorties de chunks d'abord : aujourd'hui `AnvilChunkLoader.saveChunk` sérialise et
+   compresse sur le thread appelant, et `RegionFile` se synchronise autour de chaque lecture et
+   écriture. La compression part sur le pool de workers, avec la bibliothèque native si elle est
+   présente.
+3. La pression d'allocation dans les boucles de tick : listes et maps temporaires dans les boucles
+   d'entités et de TileEntities, coordonnées boxées, objets NBT créés à chaque tick. On ne remplace
+   que ce que le profileur montre, avec les collections primitives déjà livrées avec le serveur
+   (fastutil, koloboke).
+4. Le choix des collections sur les structures chaudes : les listes d'entités et de TileEntities
+   sont parcourues et modifiées à chaque tick.
+5. Le réseau : sortir la compression du tick, réutiliser les buffers là où c'est prouvé sûr, ne
+   jamais changer le protocole.
 
----
+Méthode pour chaque point : mesurer avant, modifier, mesurer après, ne garder que si le gain est
+réel et le comportement identique.
 
-## Phase 3 — Regions: ownership and context
-
-Goal: give every chunk, entity and tile entity a single logical owner, and make the current owner
-knowable from any thread. Nothing runs in parallel in this phase.
-
-How it will proceed:
-
-1. `Region`, `RegionOwnership`, `RegionManager`: group loaded chunks into regions that do not
-   interact, with merge and split as the world changes.
-2. `RegionContext`: the "which region am I allowed to write" answer, available to any code that
-   asks, cheap enough to consult on hot paths.
-3. Regions are created and maintained, ownership is tracked, and the server still ticks everything
-   on one thread. The only visible effect is `/autothread regions`.
-
-Exit criteria: ownership is correct and stable for a day of real play, region merges and splits do
-not lose objects, no measurable cost added to the tick.
+Critères de sortie : un tableau avant/après documenté par optimisation, aucun changement de
+comportement, tests au vert, un monde identique octet pour octet après le même scénario.
 
 ---
 
-## Phase 4 — Access tracking, conflicts, dependency graph
+## Phase 2 — Snapshots de chunks, chargement et sauvegarde asynchrones
 
-Goal: learn what the loaded mods really touch, while it is still impossible to corrupt anything.
+Objectif : sortir le travail disque, la compression et le NBT du thread de simulation sans jamais
+sérialiser un chunk qu'un autre thread peut modifier.
 
-How it will proceed:
+Déroulé prévu :
 
-1. `AccessTracker`: records accesses by type (region-local read/write, global, cross-region, async
-   compute), attributed to the calling mod or plugin.
-2. `ConflictDetector`: given the tracked accesses, reports what *would* have conflicted if the
-   regions had been ticked in parallel. In this phase it only reports.
-3. `DependencyGraph`: builds the real relationships between chunks, tile entities, inventories and
-   modded networks, and updates as the world changes.
-4. Aggregated reporting, because a busy server produces hundreds of thousands of identical events.
+1. `ChunkSaveSnapshot` : une copie immuable et compacte de tout ce dont une sauvegarde de chunk a
+   besoin, prise sur le thread propriétaire dans la fenêtre la plus courte possible.
+2. `AsyncChunkSaver` : snapshot pendant le tick, puis sérialisation, compression et écriture sur le
+   pool d'entrées-sorties.
+3. `AsyncChunkLoader` : lecture, décompression et décodage NBT hors du thread ; seul le commit final
+   dans le monde se fait sur le thread propriétaire.
+4. Garder le `ChunkIOExecutor` existant de Forge fonctionnel du début à la fin : il est remplacé,
+   pas contourné.
 
-Exit criteria: a modded server runs for hours with tracking on, the conflict report is stable and
-explainable, and the overhead is small enough to leave enabled.
-
----
-
-## Phase 5 — Region scheduler, first parallel ticks
-
-Goal: tick a small number of provably independent regions at the same time.
-
-How it will proceed:
-
-1. `RegionScheduler` on the region tick pool, starting with two regions and a hard serialisation
-   fallback.
-2. The phase 4 detector stays on, now as a guard: a conflict lowers parallelism immediately.
-3. Widen gradually, scenario by scenario, never faster than the evidence.
-
-Exit criteria: determinism runs of the same scenario produce identical worlds, no duplication, no
-lost update, and a real gain in MSPT under load.
+Critères de sortie : les mondes sauvegardés par le nouveau chemin sont lisibles par le client
+vanilla et par Crucible amont ; un crash pendant une grosse sauvegarde laisse un monde chargeable ;
+réduction mesurée du pic de sauvegarde dans le p99 du MSPT.
 
 ---
 
-## Phase 6 — Entity scheduler, cross-region transactions
+## Phase 2B — Passage à l'échelle joueurs
 
-Goal: handle everything that legitimately crosses a region boundary.
+Objectif : supprimer les coûts qui croissent plus vite que le nombre de joueurs. Rien ici ne demande
+le modèle de régions, et tout est rentable dès le serveur monothread. L'analyse complète, avec les
+mesures derrière chaque point, est dans [scaling.md](scaling.md).
 
-How it will proceed:
+Déroulé prévu :
 
-1. `EntityScheduler`: atomic migration of an entity from one region to another, never ticked twice,
-   never lost, covering players, mobs, items, projectiles, vehicles and modded entities.
-2. `CrossRegionCoordinator` and `MultiRegionTransaction`: determine the regions involved, lock them
-   in ascending id order so a cycle is impossible, execute, release, with timeout and metrics.
-3. Cover the real cases: pipes and item transfer, energy and fluid networks, teleports, explosions,
-   multiblocks.
+1. **Tracking d'entités indexé par chunk.** Aujourd'hui chaque entité suivie parcourt toute la liste
+   des joueurs et chaque joueur qui bouge parcourt tout l'ensemble des entités suivies, soit 9
+   millions d'itérations par tick à 400 joueurs et 30 000 entités. En indexant les entités par chunk
+   et en ne considérant que les chunks à portée de tracking, on divise le travail par environ 75, et
+   cela se parallélise proprement plus tard.
+2. **Cache partagé de charge utile de chunk.** Les octets extraits et compressés d'un chunk ne
+   dépendent que du chunk. On les met en cache, on les invalide à la modification, et deux cents
+   joueurs au spawn paient une fois au lieu de deux cents fois.
+3. **Niveau et placement de la compression.** Les paquets de chunks compressent au niveau 4 ; le
+   niveau 1 mesure 70 % plus rapide pour 3,5 % d'octets en plus sur des données de chunk. On règle
+   le niveau et on déplace le travail sur le pool de workers avec le compresseur natif.
+4. **Budget d'envoi par joueur et contre-pression.** Un client congestionné retarde son propre flux
+   de chunks, jamais le tick.
+5. **Sauvegarde continue étalée.** Remplacer le pic de sauvegarde automatique, aujourd'hui tous les
+   chunks modifiés sérialisés sur le thread serveur, par une file de chunks sales vidée avec un
+   budget fixe par tick. La sauvegarde des données joueur part aussi hors du thread.
 
-Exit criteria: no deadlock under stress, no item duplication across a boundary, transactions
-visible and measured in `/autothread conflicts`.
-
----
-
-## Phase 7 — Instrumentation of mods and plugins
-
-Goal: extend tracking and protection to code we do not own, without asking authors for anything.
-
-How it will proceed:
-
-1. An ASM transformer, loaded through the existing LaunchWrapper/Forge coremod path, targeting only
-   the sensitive access points: world and chunk mutation, entity and tile entity collections,
-   inventories, the Forge event bus, the Bukkit scheduler, known global singletons.
-2. Instrument narrowly. Every instrumented site must justify its cost.
-3. Raise parallelism as the instrumented evidence accumulates.
-
-Exit criteria: a large modpack boots with instrumentation on, the startup cost is acceptable, and
-the tracked data is richer than what phase 4 could see.
+Critères de sortie : à nombre de joueurs synthétiques fixé, le coût de tick par joueur cesse de
+croître avec le nombre de joueurs ; le pic de sauvegarde disparaît du p99 ; les mondes restent
+identiques octet pour octet après le même scénario.
 
 ---
 
-## Phase 8 — Auto-quarantine and auto-learning
+## Phase 3 — Régions : propriété et contexte
 
-Goal: make the runtime improve itself and protect itself without an administrator in the loop.
+Objectif : donner à chaque chunk, entité et TileEntity un propriétaire logique unique, et rendre ce
+propriétaire connaissable depuis n'importe quel thread. Rien ne s'exécute en parallèle dans cette
+phase.
 
-How it will proceed:
+Déroulé prévu :
 
-1. `AutoQuarantineManager`: on repeated conflicts, threading exceptions, stalls or detected
-   non-determinism, lower parallelism for the smallest responsible unit: an object, a tile entity
-   type, a method, an event listener, a geographic area. Never a whole mod.
-2. Learning: persist observed behaviour per class and method, invalidated when the mod jar hash,
-   the server version or the instrumentation changes.
-3. Periodic re-testing, so a component quarantined by one bad interaction can earn its parallelism
-   back.
+1. `Region`, `RegionOwnership`, `RegionManager` : regrouper les chunks chargés en régions qui
+   n'interagissent pas, avec fusion et séparation au fil des changements du monde.
+2. `RegionContext` : la réponse à « quelle région ai-je le droit d'écrire », disponible pour tout
+   code qui la demande, assez peu chère pour être consultée sur les chemins chauds.
+3. Les régions sont créées et entretenues, la propriété est suivie, et le serveur ticke toujours
+   tout sur un seul thread. Le seul effet visible est `/autothread regions`.
 
-Exit criteria: the profile survives a restart, a deliberately broken test mod gets quarantined at
-the right granularity, and the rest of that mod keeps running in parallel.
+Critères de sortie : la propriété est correcte et stable sur une journée de jeu réel, les fusions et
+séparations de régions ne perdent aucun objet, aucun coût mesurable ajouté au tick.
 
 ---
 
-## Phase 9 — Native Rust library
+## Phase 4 — Suivi des accès, conflits, graphe de dépendances
 
-**Priority 1 done.** `native/` builds a Rust `cdylib`, the server loads it when present and falls
-back to Java when it is absent, refuses it on ABI mismatch, and catches panics at the boundary.
+Objectif : apprendre ce que les mods chargés touchent réellement, tant qu'il est encore impossible
+de corrompre quoi que ce soit.
 
-Implemented and measured on 200 kB of chunk-shaped data, JNI included:
+Déroulé prévu :
 
-| Operation | Java | Rust | Change |
+1. `AccessTracker` : enregistre les accès par type (lecture et écriture locales à la région,
+   globales, inter-régions, calcul asynchrone), attribués au mod ou au plugin appelant.
+2. `ConflictDetector` : à partir des accès enregistrés, signale ce qui *aurait* été en conflit si les
+   régions avaient été tickées en parallèle. Dans cette phase, il ne fait que signaler.
+3. `DependencyGraph` : construit les relations réelles entre chunks, TileEntities, inventaires et
+   réseaux moddés, et se met à jour avec le monde.
+4. Rapport agrégé, parce qu'un serveur chargé produit des centaines de milliers d'événements
+   identiques.
+
+Critères de sortie : un serveur moddé tourne des heures avec le suivi activé, le rapport de conflits
+est stable et explicable, et le surcoût est assez faible pour laisser le suivi actif.
+
+---
+
+## Phase 5 — Ordonnanceur de régions, premiers ticks parallèles
+
+Objectif : ticker en même temps un petit nombre de régions dont l'indépendance est prouvée.
+
+Déroulé prévu :
+
+1. `RegionScheduler` sur le pool de tick de régions, en commençant par deux régions et un repli
+   strict vers la sérialisation.
+2. Le détecteur de la phase 4 reste actif, cette fois comme garde-fou : un conflit fait baisser le
+   parallélisme immédiatement.
+3. Élargir progressivement, scénario par scénario, jamais plus vite que les preuves.
+
+Critères de sortie : des exécutions répétées du même scénario produisent des mondes identiques,
+aucune duplication, aucune mise à jour perdue, et un gain réel de MSPT sous charge.
+
+---
+
+## Phase 6 — Ordonnanceur d'entités, transactions inter-régions
+
+Objectif : traiter tout ce qui franchit légitimement une frontière de région.
+
+Déroulé prévu :
+
+1. `EntityScheduler` : migration atomique d'une entité d'une région à une autre, jamais tickée deux
+   fois, jamais perdue, pour les joueurs, les mobs, les items, les projectiles, les véhicules et les
+   entités moddées.
+2. `CrossRegionCoordinator` et `MultiRegionTransaction` : déterminer les régions concernées, les
+   verrouiller par identifiant croissant pour rendre tout cycle impossible, exécuter, libérer, avec
+   timeout et métriques.
+3. Couvrir les cas réels : pipes et transfert d'items, réseaux d'énergie et de fluides,
+   téléportations, explosions, multiblocs.
+
+Critères de sortie : aucun deadlock sous stress, aucune duplication d'item à travers une frontière,
+transactions visibles et mesurées dans `/autothread conflicts`.
+
+---
+
+## Phase 6B — Plugins, commandes et API en multithread
+
+Objectif : que l'exécution des plugins cesse d'être un point de sérialisation global, sans qu'aucun
+plugin existant n'ait à le savoir.
+
+Ce qui se passe aujourd'hui : le scheduler Bukkit exécute toutes les tâches synchrones sur le thread
+serveur, chaque commande de plugin s'exécute sur le thread serveur, et chaque événement Bukkit est
+distribué sur le thread serveur. Un seul plugin lent bloque tout le monde.
+
+Déroulé prévu :
+
+1. **Commandes.** Une commande n'est presque jamais globale : elle agit sur un joueur, un bloc, un
+   inventaire, donc sur une région. Le runtime détermine la région visée à partir de l'émetteur et
+   des arguments, exécute la commande dans le contexte de cette région, et retombe sur une exécution
+   globale quand la cible est ambiguë ou globale. Une commande qui se met à toucher plusieurs
+   régions déclenche une transaction, pas une exception.
+2. **Scheduler Bukkit.** `runTask` continue de signifier « exécute-moi là où c'est sûr ». Le runtime
+   choisit ensuite : région, global, asynchrone ou sérialisé, selon ce que la tâche a touché les
+   fois précédentes. `runTaskAsynchronously` garde sa sémantique actuelle.
+3. **Événements.** Un événement déclenché dans une région est distribué dans cette région. Les
+   listeners sont observés individuellement : celui qui ne touche que la région active devient
+   parallélisable, celui qui écrit un état global est sérialisé, et cette décision est prise par
+   listener, pas par plugin.
+4. **API interne** pour le code neuf : `GlobalScheduler`, `RegionScheduler`, `EntityScheduler`,
+   `AsyncScheduler`. Proposée, jamais nécessaire pour faire tourner un plugin classique.
+
+La même mécanique s'applique aux mods : un handler d'événement Forge est observé exactement comme un
+listener Bukkit, et un mod dont une partie est parallélisable et une autre non voit seulement la
+partie fautive sérialisée.
+
+Critères de sortie : un lot de plugins courants tourne sans modification, deux commandes visant deux
+régions différentes s'exécutent réellement en même temps, et aucun plugin ne reçoit d'exception liée
+au threading.
+
+---
+
+## Phase 7 — Instrumentation des mods et plugins
+
+Objectif : étendre le suivi et la protection au code qu'on ne possède pas, sans rien demander aux
+auteurs.
+
+Déroulé prévu :
+
+1. Un transformer ASM, chargé par le chemin coremod LaunchWrapper/Forge existant, ciblant uniquement
+   les points d'accès sensibles : modification du monde et des chunks, collections d'entités et de
+   TileEntities, inventaires, bus d'événements Forge, scheduler Bukkit, singletons globaux connus.
+2. Instrumenter étroitement. Chaque site instrumenté doit justifier son coût.
+3. Augmenter le parallélisme à mesure que les preuves instrumentées s'accumulent.
+
+Critères de sortie : un gros modpack démarre avec l'instrumentation active, le coût au démarrage est
+acceptable, et les données collectées sont plus riches que ce que la phase 4 pouvait voir.
+
+---
+
+## Phase 8 — Auto-quarantaine et apprentissage
+
+Objectif : rendre le runtime capable de s'améliorer et de se protéger sans administrateur dans la
+boucle.
+
+Déroulé prévu :
+
+1. `AutoQuarantineManager` : sur conflits répétés, exceptions de threading, blocages ou
+   non-déterminisme détecté, baisser le parallélisme de la plus petite unité responsable : un objet,
+   un type de TileEntity, une méthode, un listener, une zone géographique. Jamais un mod entier.
+2. Apprentissage : persister le comportement observé par classe et par méthode, invalidé quand le
+   hash du jar du mod, la version du serveur ou l'instrumentation changent.
+3. Retest périodique, pour qu'un composant mis en quarantaine par une mauvaise interaction puisse
+   regagner son parallélisme.
+
+Critères de sortie : le profil survit à un redémarrage, un mod de test délibérément cassé est mis en
+quarantaine à la bonne granularité, et le reste de ce mod continue de tourner en parallèle.
+
+---
+
+## Phase 9 — Bibliothèque native Rust
+
+**Priorité 1 faite.** `native/` produit une bibliothèque dynamique Rust, le serveur la charge quand
+elle est présente et retombe sur Java quand elle est absente, la refuse en cas d'ABI incompatible,
+et attrape les panics à la frontière.
+
+Implémenté et mesuré sur 200 ko de données en forme de chunk, JNI compris :
+
+| Opération | Java | Rust | Écart |
 | --- | --- | --- | --- |
-| zlib compress | 195 MiB/s | 265 MiB/s | +36% |
-| zlib decompress | 1010 MiB/s | 1544 MiB/s | +53% |
-| XXH64 | 4296 MiB/s | 7509 MiB/s | +75% |
-| Compressed size | 19 268 B | 18 806 B | −2.4% |
+| Compression zlib | 195 Mio/s | 265 Mio/s | +36 % |
+| Décompression zlib | 1010 Mio/s | 1544 Mio/s | +53 % |
+| XXH64 | 4296 Mio/s | 7509 Mio/s | +75 % |
+| Taille compressée | 19 268 o | 18 806 o | −2,4 % |
 
-Region-file sector arithmetic and location-table validation are implemented as pure functions with
-tests, ready for the phase 2 writer.
+L'arithmétique des secteurs de fichiers region et la validation de la table de localisation sont
+implémentées en fonctions pures testées, prêtes pour l'écrivain de la phase 2.
 
-Priority 2, once the Java architecture is stable: NBT binary encode and decode, pathfinding over
-immutable snapshots, batch collision and spatial queries. Each one has to beat Java on the existing
-harness or it does not ship. Details in [native-engine.md](native-engine.md).
-
----
-
-## Phase 10 — Heavy paths
-
-Goal: move the remaining expensive work off the region thread once the architecture can support it.
-
-Planned: asynchronous lighting (snapshot, worker computes, owner applies), pathfinding on
-snapshots, batched collisions, and dedicated adapters for the big modded networks (AE2, BuildCraft,
-IC2, Thermal Expansion, Ender IO, Mekanism, GregTech, Railcraft, ComputerCraft, OpenComputers). The
-generic mechanism must work without those adapters; adapters only make known cases faster.
+Priorité 2, une fois l'architecture Java stable : encodage et décodage binaire NBT, pathfinding sur
+snapshots immuables, collisions et recherches spatiales par lots. Chacun doit battre Java sur le
+banc existant, sinon il ne part pas. Détails dans [native-engine.md](native-engine.md).
 
 ---
 
-## Cross-cutting work, running in every phase
+## Phase 10 — Chemins lourds
 
-**Benchmarks.** A reproducible harness and the eight scenarios: players at spawn, players spread
-out, large industrial bases, exploration and chunk generation, many mobs, many tile entities, large
-networks, mass world edits. Player counts from 50 to 500. Target: 250 players on a large modpack at
-20 TPS with p95 MSPT at or under 50 ms, on the AMD EPYC 4344P reference machine.
+Objectif : sortir du thread de région le travail coûteux restant, une fois que l'architecture peut
+le supporter.
 
-**Save integrity and determinism.** A world must stay readable after a controlled crash, a stop
-under load, repeated saves, region migrations, cross-region transactions and chunk reload. Repeated
-runs of one scenario must produce the same world, checked by hashing decompressed chunk content.
+Prévu : lighting asynchrone (snapshot, calcul sur worker, application par le propriétaire),
+pathfinding sur snapshots, collisions par lots, et adaptateurs dédiés aux gros réseaux moddés (AE2,
+BuildCraft, IC2, Thermal Expansion, Ender IO, Mekanism, GregTech, Railcraft, ComputerCraft,
+OpenComputers). Le mécanisme générique doit fonctionner sans ces adaptateurs ; les adaptateurs ne
+font qu'accélérer les cas connus.
 
-**CI.** Java build, Rust build, unit tests, integration tests, a server boot test and a benchmark
-smoke test, on Linux x86_64 first and Windows x86_64 second.
+---
 
-**Compatibility bench.** IC2, BuildCraft, AE2, Thermal Expansion, Thaumcraft, Ender IO, Mekanism,
+## Phase 11 — Dégradation adaptative et comptabilité des coûts
+
+Objectif : tenir 20 TPS en dépensant de la qualité plutôt que du temps de tick, automatiquement, et
+savoir exactement qui coûte quoi.
+
+Déroulé prévu :
+
+1. **Distance de vue et de simulation adaptatives**, pilotées par le budget de tick mesuré. Le nombre
+   de chunks chargés par joueur croît comme le carré de la distance de vue, donc la baisser de deux
+   crans dans une zone bondée retire plus de 40 % de tous les coûts par chunk d'un coup. Appliqué
+   localement, annulé automatiquement.
+2. **Caps de mobs, throttling des TileEntities et fusion d'items adaptatifs**, sur les classes dont
+   la couche d'apprentissage de la phase 8 a prouvé qu'elles le tolèrent.
+3. **Fréquence de tracking des entités** réduite pour les entités lointaines avant toute autre
+   dégradation.
+4. **Comptabilité des coûts par joueur, par mod et par plugin**, parce qu'à 400 joueurs une réponse
+   de support a besoin d'un nom, pas d'une moyenne.
+
+L'ordre compte : la qualité est sacrifiée dans l'ordre ci-dessus, et le TPS est la dernière chose à
+céder. Aucun administrateur ne configure quoi que ce soit par mod.
+
+Critères de sortie : sous une surcharge délibérée, le serveur baisse la qualité, garde 20 TPS, et
+restaure les réglages précédents tout seul une fois la charge passée.
+
+---
+
+## Travaux transverses, présents dans toutes les phases
+
+**Bancs d'essai.** Un harnais reproductible et les huit scénarios : joueurs groupés au spawn,
+joueurs dispersés, grosses bases industrielles, exploration et génération de chunks, beaucoup de
+mobs, beaucoup de TileEntities, gros réseaux, grosses modifications de monde. De 50 à 500 joueurs.
+Cible : 250 joueurs sur un gros modpack à 20 TPS avec un p95 MSPT à 50 ms ou moins, sur la machine
+de référence AMD EPYC 4344P.
+
+**Intégrité des sauvegardes et déterminisme.** Un monde doit rester lisible après un crash
+contrôlé, un arrêt sous charge, des sauvegardes répétées, des migrations de régions, des
+transactions inter-régions et un déchargement-rechargement de chunk. Des exécutions répétées d'un
+même scénario doivent produire le même monde, vérifié en hachant le contenu décompressé des chunks.
+
+**Mémoire et GC.** Objectif explicite : que le serveur consomme le moins de RAM possible à charge
+égale. Ce n'est pas une option de configuration, c'est un travail d'ingénierie sur sept fronts,
+chacun mesuré avant et après :
+
+1. **Ne pas garder de tampon surdimensionné.** Un paquet de chunk conserve aujourd'hui le tableau de
+   sortie de la compression à la taille de l'entrée, soit 164 ko retenus pour environ 20 ko utiles,
+   pour chaque paquet en attente d'envoi. Premier correctif livré en phase 1.
+2. **Allouer moins sur les chemins chauds.** Le streaming de chunks est la plus grosse source de
+   déchets d'un serveur chargé, loin devant les boucles de tick. Moins d'allocations veut dire moins
+   de pauses GC, donc un meilleur p99, pas seulement un tas plus petit.
+3. **Structures compactes.** Collections primitives sur les structures chaudes, pas de coordonnées
+   boxées, pas de `Integer`/`Long` en clés de map.
+4. **Moins de chunks chargés.** C'est le levier dominant : la mémoire suit le nombre de chunks, qui
+   suit le carré de la distance de vue. La distance adaptative de la phase 11 est aussi une
+   optimisation mémoire.
+5. **Déchargement plus agressif mais sûr** des chunks sans joueur, et politique de despawn et de
+   fusion des entités item sous pression.
+6. **Budget mémoire pour les caches du moteur**, respecté par éviction, jamais dépassé en silence.
+7. **Configuration GC documentée par taille de tas**, sans aucun flag expérimental obligatoire.
+
+**Catalogue d'optimisations monothread.** Redstone, hoppers, lighting, collisions, entités item,
+spawn de mobs, allocations NBT. Indépendant du modèle de threading, mesuré un par un, listé dans
+[folia.md](folia.md).
+
+**Intégration continue.** Build Java, build Rust, tests unitaires, tests d'intégration, test de
+démarrage du serveur et banc d'essai de fumée, sur Linux x86_64 en priorité puis Windows x86_64.
+
+**Banc de compatibilité.** IC2, BuildCraft, AE2, Thermal Expansion, Thaumcraft, Ender IO, Mekanism,
 GregTech, Galacticraft, Twilight Forest, Railcraft, MineFactory Reloaded, ComputerCraft,
-OpenComputers, plus WorldEdit, WorldGuard, Vault, PermissionsEx, an Essentials equivalent and a
-1.7.10-compatible ProtocolLib.
+OpenComputers, plus WorldEdit, WorldGuard, Vault, PermissionsEx, un équivalent Essentials et un
+ProtocolLib compatible 1.7.10.

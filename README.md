@@ -2,81 +2,83 @@
 
 # GammaEngine
 
-GammaEngine is a Minecraft **1.7.10** server that runs Forge mods and Bukkit plugins side by side,
-and that actually uses several physical CPU cores to simulate the world.
+GammaEngine est un serveur Minecraft **1.7.10** qui fait tourner ensemble les mods Forge et les
+plugins Bukkit, et qui exploite réellement plusieurs cœurs physiques pour simuler le monde.
 
-It is a fork of [Crucible](https://github.com/CrucibleMC/Crucible), which is itself a fork of
-Thermos. Everything Crucible supports keeps working: the same mods, the same plugins, the same
-worlds, the same save format, the same 1.7.10 protocol.
+C'est un fork de [Crucible](https://github.com/CrucibleMC/Crucible), lui-même fork de Thermos. Tout
+ce que Crucible supporte continue de fonctionner : les mêmes mods, les mêmes plugins, les mêmes
+mondes, le même format de sauvegarde, le même protocole 1.7.10.
 
-What GammaEngine adds is the **AutoThread runtime**.
+Ce que GammaEngine ajoute, c'est le **runtime AutoThread**.
 
-## AutoThread in one paragraph
+## AutoThread en un paragraphe
 
-The server decides by itself what can run in parallel. There is no threading mode to choose, no
-`legacy` / `hybrid` / `regionized` switch, and nothing for a mod or plugin author to declare. The
-runtime watches what code actually touches at runtime, splits the loaded world into regions that do
-not interact, ticks independent regions at the same time, and serializes anything it has not proven
-safe. When a component misbehaves it loses parallelism at the finest possible granularity, one
-class or one object, never a whole mod.
+Le serveur décide seul de ce qui peut s'exécuter en parallèle. Il n'y a aucun mode de threading à
+choisir, pas de `legacy` / `hybrid` / `regionized`, et rien à déclarer pour un auteur de mod ou de
+plugin. Le runtime observe ce que le code touche réellement à l'exécution, découpe le monde chargé
+en régions qui n'interagissent pas, ticke simultanément les régions indépendantes, et sérialise
+tout ce qu'il n'a pas prouvé sûr. Quand un composant pose problème, il perd son parallélisme à la
+granularité la plus fine possible, une classe ou un objet, jamais un mod entier.
 
-Priority order, and it is not negotiable: world integrity, no silent corruption, compatibility,
-stability, then performance.
+L'ordre de priorité n'est pas négociable : intégrité du monde, aucune corruption silencieuse,
+compatibilité, stabilité, puis performances.
 
-## Status
+## État du projet
 
-Early development. The runtime, its metrics and the native library are in place; region-parallel
-simulation is being built on top of them. See [docs/roadmap.md](docs/roadmap.md) for the phase by
-phase plan and where the project currently stands.
+Développement précoce. Le runtime, ses métriques et la bibliothèque native sont en place ; la
+simulation parallèle par régions se construit dessus. Voir [docs/roadmap.md](docs/roadmap.md) pour
+le plan phase par phase et l'avancement réel.
 
-## Requirements
+## Prérequis
 
-* Java 8 through 21 (lwjgl3ify is embedded, as in Crucible)
-* Forge 1.7.10-10.13.4.1614, Bukkit API 1.7.10-R0.1-SNAPSHOT
+* Java 8 à 21 (lwjgl3ify est intégré, comme dans Crucible)
+* Forge 1.7.10-10.13.4.1614, API Bukkit 1.7.10-R0.1-SNAPSHOT
 
-## Running
+## Lancer le serveur
 
 ```bash
 java -Xms4G -Xmx8G -jar GammaEngine-1.7.10-<version>-server.jar nogui
 ```
 
-The first launch installs the server libraries and asks for a restart. On Java 9 or newer, add the
-flags from `java9args.txt`.
+Le premier lancement installe les bibliothèques du serveur puis demande un redémarrage. Sur Java 9
+ou plus récent, ajouter les arguments de `java9args.txt`.
 
-Configuration files, all optional:
+Fichiers de configuration, tous optionnels :
 
-| File | Contents |
+| Fichier | Contenu |
 | --- | --- |
-| `Gamma.yml` | General server settings, migrated automatically from `Crucible.yml` |
-| `GammaAutoThread.yml` | AutoThread resource limits and diagnostics. No per-mod options, by design |
+| `Gamma.yml` | Réglages généraux du serveur, migrés automatiquement depuis `Crucible.yml` |
+| `GammaAutoThread.yml` | Limites de ressources et diagnostics AutoThread. Aucun réglage par mod, volontairement |
 
-Commands: `/gamma` (alias `/crucible`) for server information, `/autothread` for runtime status,
-worker occupancy, conflicts and profiling.
+Commandes : `/gamma` (alias `/crucible`) pour les informations serveur, `/autothread` pour l'état du
+runtime, l'occupation des workers, les conflits et le profilage.
 
-## Building
+## Compiler
 
-See [docs/build.md](docs/build.md). Short version:
+Voir [docs/build.md](docs/build.md). En résumé :
 
 ```bash
-./gradlew setupCrucible     # once, creates the patched workspace
-./gradlew buildPackages     # server jar in build/distributions/
-cd native && cargo build --release   # optional native acceleration
+./gradlew setupCrucible     # une fois, crée le workspace patché
+./gradlew buildPackages     # jar serveur dans build/distributions/
+cd native && cargo build --release   # accélération native, optionnelle
 ```
 
 ## Documentation
 
-| Document | Contents |
+| Document | Contenu |
 | --- | --- |
-| [docs/roadmap.md](docs/roadmap.md) | The phases, what each one does, and current status |
-| [docs/architecture.md](docs/architecture.md) | Subsystems and the tick paths they take over |
-| [docs/threading-model.md](docs/threading-model.md) | Ownership, access rules, locking, the contract |
-| [docs/native-engine.md](docs/native-engine.md) | The Rust library, what it accelerates, measured results |
-| [docs/build.md](docs/build.md) | Reproducible build |
+| [docs/roadmap.md](docs/roadmap.md) | Les phases, ce que fait chacune, et l'avancement |
+| [docs/scaling.md](docs/scaling.md) | Où part la consommation à 400 joueurs, chiffres à l'appui |
+| [docs/folia.md](docs/folia.md) | Ce qu'on reprend de Folia et où on doit diverger |
+| [docs/architecture.md](docs/architecture.md) | Les sous-systèmes et les chemins de tick repris |
+| [docs/threading-model.md](docs/threading-model.md) | Propriété, règles d'accès, verrouillage, le contrat |
+| [docs/native-engine.md](docs/native-engine.md) | La bibliothèque Rust, ce qu'elle accélère, les mesures |
+| [docs/build.md](docs/build.md) | Build reproductible |
 
-## Credits
+## Crédits
 
-* [Crucible](https://github.com/CrucibleMC/Crucible) — upstream project
-* [Thermos](https://github.com/CyberdyneCC/Thermos) — Crucible's own upstream
-* [Spigot](https://hub.spigotmc.org/stash/projects/SPIGOT/repos/spigot/browse) and
-  [Paper](https://github.com/PaperMC/Paper) — many improvements over Bukkit
-* [lwjgl3ify](https://github.com/GTNewHorizons/lwjgl3ify) — Java 9+ support
+* [Crucible](https://github.com/CrucibleMC/Crucible) — projet amont
+* [Thermos](https://github.com/CyberdyneCC/Thermos) — l'amont de Crucible
+* [Spigot](https://hub.spigotmc.org/stash/projects/SPIGOT/repos/spigot/browse) et
+  [Paper](https://github.com/PaperMC/Paper) — de nombreuses améliorations sur Bukkit
+* [lwjgl3ify](https://github.com/GTNewHorizons/lwjgl3ify) — support Java 9+

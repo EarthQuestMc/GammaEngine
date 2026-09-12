@@ -128,6 +128,18 @@ public class NativeEngineTest {
         byte[] compressed = NativeEngine.javaCompress(data, 6);
 
         System.out.println("[bench] payload " + size + " bytes, compressed " + compressed.length + " bytes");
+        // Level 4 is what Minecraft uses for chunk packets and level 6 what it uses for region
+        // files, so both are worth knowing: the chunk streaming budget depends on the first.
+        for (final int level : new int[]{1, 4, 6}) {
+            byte[] atLevel = NativeEngine.javaCompress(data, level);
+            report("compress java L" + level, measure(new Runnable() {
+                @Override
+                public void run() {
+                    NativeEngine.javaCompress(data, level);
+                }
+            }), size);
+            System.out.println("[bench]   level " + level + " output " + atLevel.length + " bytes");
+        }
         report("compress java  ", measure(new Runnable() {
             @Override
             public void run() {

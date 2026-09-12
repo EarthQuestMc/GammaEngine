@@ -1,82 +1,96 @@
-# Building GammaEngine
+# Compiler GammaEngine
 
-GammaEngine is a fork of Crucible for Minecraft 1.7.10. It keeps Crucible's patch-based build:
-Minecraft and Forge sources are decompiled into a generated workspace, patches from `patches/` are
-applied on top, and the fork's own code lives in `src/main/java`.
+GammaEngine est un fork de Crucible pour Minecraft 1.7.10. Il conserve le build à base de patches de
+Crucible : les sources Minecraft et Forge sont décompilées dans un workspace généré, les patches de
+`patches/` sont appliqués par-dessus, et le code propre au fork vit dans `src/main/java`.
 
-## Versions this build targets
+## Versions visées par ce build
 
-| Component | Version |
+| Composant | Version |
 | --- | --- |
 | Minecraft | 1.7.10 |
-| MCP mappings | 9.08 (stable, `snapshot` channel not used) |
+| Mappings MCP | 9.08 (canal stable, pas `snapshot`) |
 | Forge | 10.13.4.1614 |
-| Bukkit API | 1.7.10-R0.1-SNAPSHOT |
+| API Bukkit | 1.7.10-R0.1-SNAPSHOT |
 | Gradle | 8.0 (wrapper) |
-| Build JDK | Java 8 (`JAVA_HOME` must point at a JDK 8) |
-| buildSrc toolchain | Java 17, resolved through Gradle toolchains |
-| Runtime JDK | Java 8 through 21 (lwjgl3ify is embedded) |
+| JDK de build | Java 8 (`JAVA_HOME` doit pointer sur un JDK 8) |
+| Toolchain buildSrc | Java 17, résolue par les toolchains Gradle |
+| JDK d'exécution | Java 8 à 21 (lwjgl3ify est intégré) |
 
-Gradle itself runs on the JDK 8 in `JAVA_HOME`; only the `buildSrc` plugin compiles with a Java 17
-toolchain, which Gradle locates automatically (for example `~/.jdks/ms-17.x`). A machine with only
-a JDK 8 installed cannot build `buildSrc` from scratch.
+Gradle lui-même tourne sur le JDK 8 de `JAVA_HOME` ; seul le plugin `buildSrc` compile avec une
+toolchain Java 17, que Gradle localise automatiquement (par exemple `~/.jdks/ms-17.x`). Une machine
+qui n'a que le JDK 8 ne peut pas compiler `buildSrc` de zéro.
 
-## First build
+## Premier build
 
 ```bash
-export JAVA_HOME=/path/to/jdk8          # Windows: set JAVA_HOME to the JDK 8 directory
-./gradlew setupCrucible                 # ~2 min: download, deobfuscate, decompile, patch
-./gradlew buildPackages                 # ~1 min: compile, reobfuscate, package
+export JAVA_HOME=/chemin/vers/jdk8     # Windows : définir JAVA_HOME sur le dossier du JDK 8
+./gradlew setupCrucible                # ~2 min : téléchargement, désobfuscation, décompilation, patches
+./gradlew buildPackages                # ~1 min : compilation, réobfuscation, empaquetage
 ```
 
-Artifacts land in `build/distributions/`:
+Les artefacts arrivent dans `build/distributions/` :
 
-* `Crucible-<mcversion>-<branch>-<hash>-server.jar` — the server,
-* `libraries.zip` — every runtime dependency, for machines that cannot download them at boot.
+* `GammaEngine-<version mc>-<branche>-<hash>-server.jar` — le serveur,
+* `libraries.zip` — toutes les dépendances d'exécution, pour les machines qui ne peuvent pas les
+  télécharger au démarrage.
 
-The server jar downloads what it needs on first launch and asks for a restart; that is upstream
-Crucible behaviour and is expected.
+Le jar du serveur télécharge ce dont il a besoin au premier lancement puis demande un redémarrage :
+c'est le comportement de Crucible amont, il est normal.
 
-## What lives where
+## Ce qui se trouve où
 
-| Path | Contents |
+| Chemin | Contenu |
 | --- | --- |
-| `src/main/java` | Fork code: CraftBukkit, Crucible, and everything under `io/github/gammaengine` |
-| `src/test/java` | Unit tests (JUnit 4), run with `./gradlew :eclipse:cauldron:test` |
-| `patches/` | Diffs applied to decompiled Minecraft/Forge sources |
-| `eclipse/cauldron/src/main/java` | Generated workspace: decompiled + patched sources. Not in git |
-| `buildSrc/` | The `crucible` Gradle plugin that drives setup, patching and reobfuscation |
+| `src/main/java` | Code du fork : CraftBukkit, Crucible, et tout `io/github/gammaengine` |
+| `src/test/java` | Tests unitaires (JUnit 4), lancés par `./gradlew :eclipse:cauldron:test` |
+| `patches/` | Diffs appliqués aux sources décompilées de Minecraft et Forge |
+| `eclipse/cauldron/src/main/java` | Workspace généré : sources décompilées puis patchées. Hors git |
+| `native/` | Bibliothèque Rust optionnelle |
+| `buildSrc/` | Le plugin Gradle `crucible` qui pilote setup, patches et réobfuscation |
 
-Editing a Minecraft or Forge class means editing it in `eclipse/cauldron/src/main/java` and then
-regenerating the diffs:
+Modifier une classe Minecraft ou Forge se fait dans `eclipse/cauldron/src/main/java`, puis on
+régénère les diffs :
 
 ```bash
 ./gradlew genPatches
 ```
 
-Editing fork-owned code means editing `src/main/java` directly; no patch step is involved. New
-GammaEngine subsystems therefore always belong in `src/main/java/io/github/gammaengine`, and the
-patch applied to a vanilla class should be a single call into them.
+Modifier du code appartenant au fork se fait directement dans `src/main/java` ; aucune étape de
+patch n'est impliquée. Un nouveau sous-système GammaEngine va donc toujours dans
+`src/main/java/io/github/gammaengine`, et le patch appliqué à une classe vanilla doit se réduire à
+un appel vers lui.
 
-## Useful tasks
+## Tâches utiles
 
-| Task | Purpose |
+| Tâche | Rôle |
 | --- | --- |
-| `./gradlew setupCrucible` | Create or repair the workspace |
-| `./gradlew :eclipse:cauldron:compileJava` | Fast compile check (~20 s) |
-| `./gradlew :eclipse:cauldron:test` | Run the unit tests |
-| `./gradlew buildPackages` | Full server jar + libraries archive |
-| `./gradlew genPatches` | Regenerate `patches/` from the workspace |
-| `./gradlew clean setupCrucible` | Rebuild the workspace after pulling upstream changes |
+| `./gradlew setupCrucible` | Créer ou réparer le workspace |
+| `./gradlew :eclipse:cauldron:compileJava` | Vérification de compilation rapide (~20 s) |
+| `./gradlew :eclipse:cauldron:test` | Lancer les tests unitaires |
+| `./gradlew buildPackages` | Jar serveur complet et archive des bibliothèques |
+| `./gradlew genPatches` | Régénérer `patches/` depuis le workspace |
+| `./gradlew clean setupCrucible` | Reconstruire le workspace après un pull amont |
 
-## Running a development server
+## Bibliothèque native
+
+```bash
+cd native
+cargo test
+cargo build --release
+```
+
+Elle est optionnelle : sans elle le serveur fonctionne à l'identique, seulement plus lentement sur
+les chemins qu'elle accélère. Voir [native-engine.md](native-engine.md).
+
+## Lancer un serveur de développement
 
 ```bash
 mkdir -p run && cd run
-cp ../build/distributions/Crucible-*-server.jar server.jar
+cp ../build/distributions/GammaEngine-*-server.jar server.jar
 echo "eula=true" > eula.txt
-java -Xms4G -Xmx8G -jar server.jar nogui     # first run installs libraries and exits
+java -Xms4G -Xmx8G -jar server.jar nogui     # le premier lancement installe les bibliothèques et s'arrête
 java -Xms4G -Xmx8G -jar server.jar nogui
 ```
 
-On Java 9 or newer, add the flags from `java9args.txt`.
+Sur Java 9 ou plus récent, ajouter les arguments de `java9args.txt`.
