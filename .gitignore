@@ -48,3 +48,6 @@ hs_err_pid*
 
 # Rust native engine
 native/target/
+
+# Local test server
+/run/

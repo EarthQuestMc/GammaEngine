@@ -34,6 +34,7 @@ public final class AutoThreadRuntime {
 
     private volatile boolean booted;
     private volatile boolean running;
+    private volatile boolean stopped;
     private volatile Thread mainThread;
     private ThreadPools pools;
     private long tickStartNanos;
@@ -95,11 +96,18 @@ public final class AutoThreadRuntime {
         profiler.record("server.tick", duration);
     }
 
-    /** Called before the server saves and stops. */
+    /**
+     * Called before the server saves and stops.
+     *
+     * <p>The server reaches this more than once on a normal stop: CraftBukkit stops the server and
+     * the JVM shutdown hook stops it again. Shutting the pools down twice is harmless but logging
+     * it twice makes an operator think something went wrong, so the second call returns silently.
+     */
     public synchronized void shutdown() {
-        if (!booted) {
+        if (!booted || stopped) {
             return;
         }
+        stopped = true;
         running = false;
         if (GammaProfiler.get().sessionActive()) {
             String report = GammaProfiler.get().stopSession();
