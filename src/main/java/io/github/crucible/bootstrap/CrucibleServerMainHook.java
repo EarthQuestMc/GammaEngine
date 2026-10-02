@@ -28,6 +28,11 @@ public class CrucibleServerMainHook {
     public static final PrintStream originalErr = System.err;
 
     public static void relaunchMain(String[] args) throws Exception {
+        // GammaEngine - the banner is the first thing on the console, before any log framework is
+        // configured, so an operator always knows which build they are looking at.
+        io.github.gammaengine.util.ConsoleBanner.print(System.out,
+                "Minecraft 1.7.10  |  Forge 10.13.4.1614  |  Bukkit 1.7.10-R0.1-SNAPSHOT",
+                "Multi-core Forge + Bukkit server, powered by the AutoThread runtime");
         System.out.println("[GammaEngine] Running pre-launch tweaks");
 
         File injectFile = new File("inject.properties");
