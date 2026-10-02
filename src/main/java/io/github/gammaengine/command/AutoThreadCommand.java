@@ -36,7 +36,8 @@ public class AutoThreadCommand extends Command {
                         + "&b  >&e /autothread conflicts &7-&a observed access conflicts.\n"
                         + "&b  >&e /autothread native &7-&a native engine state.\n"
                         + "&b  >&e /autothread profile start|stop|report &7-&a profiling session.\n"
-                        + "&b  >&e /autothread bench start|stop &7-&a synthetic load benchmark."));
+                        + "&b  >&e /autothread bench start|stop &7-&a synthetic load benchmark.\n"
+                        + "&b  >&e /autothread memory [gc] &7-&a heap, off-heap and world memory."));
         setPermission("gammaengine.autothread");
     }
 
@@ -65,6 +66,9 @@ public class AutoThreadCommand extends Command {
             profile(sender, args);
         } else if ("bench".equals(action)) {
             bench(sender, args);
+        } else if ("memory".equals(action) || "mem".equals(action)) {
+            boolean collect = args.length > 1 && ("gc".equalsIgnoreCase(args[1]) || "collect".equalsIgnoreCase(args[1]));
+            sendLines(sender, io.github.gammaengine.diag.MemoryReport.text(collect));
         } else {
             sender.sendMessage(usageMessage);
         }
