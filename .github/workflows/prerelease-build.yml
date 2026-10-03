@@ -3,7 +3,7 @@ name: Pre-release build
 on:
   push:
     branches:
-      - staging
+      - main
 
 permissions:
   contents: write
@@ -46,15 +46,15 @@ jobs:
     - name: Rename JAR with dev version
       run: |
         for file in build/distributions/*-server.jar; do
-          mv "$file" "build/distributions/Crucible-1.7.10-staging-${{ steps.short_sha.outputs.sha }}-dev-${{ steps.commit_count.outputs.count }}-server.jar"
+          mv "$file" "build/distributions/GammaEngine-1.7.10-main-${{ steps.short_sha.outputs.sha }}-dev-${{ steps.commit_count.outputs.count }}-server.jar"
         done
 
     - name: Create GitHub pre-release
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: staging-${{ steps.short_sha.outputs.sha }}
+        tag_name: main-${{ steps.short_sha.outputs.sha }}
         prerelease: true
-        name: Staging Build ${{ steps.short_sha.outputs.sha }} | dev-${{ steps.commit_count.outputs.count }}
+        name: Main Build ${{ steps.short_sha.outputs.sha }} | dev-${{ steps.commit_count.outputs.count }}
         body: |
           This is an automatic pre-release dev build.
           
