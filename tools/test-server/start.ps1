@@ -11,12 +11,16 @@
 
 .PARAMETER JvmArgs
     Extra JVM arguments, for example '-XX:+UseZGC','-XX:+ZGenerational' on Java 21.
+
+.PARAMETER NoConsole
+    Starts without reading the console, for a server run in the background with no input attached.
 #>
 param(
     [string]$Dir = (Join-Path $PSScriptRoot '..\..\test-server'),
     [string]$Java = 'java',
     [string]$Memory = '4G',
-    [string[]]$JvmArgs = @()
+    [string[]]$JvmArgs = @(),
+    [switch]$NoConsole
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,7 +46,12 @@ if ($major -ge 9) {
     $arguments += "@$(Join-Path $repo 'java9args.txt')"
 }
 $arguments += $JvmArgs
-$arguments += @('-jar', 'server.jar', 'nogui')
+$arguments += @('-jar', 'server.jar')
+if ($NoConsole) {
+    # Before nogui: FML's argument parser drops an option without a value when it comes last.
+    $arguments += '--noconsole'
+}
+$arguments += 'nogui'
 
 Write-Host "[GammaEngine] Java $major ($versionLine)"
 Write-Host "[GammaEngine] $Java $($arguments -join ' ')"
