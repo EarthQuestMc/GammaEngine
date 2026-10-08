@@ -132,6 +132,11 @@ son hash, ce qui convient tant qu'aucune version n'est publiée.
   fichiers sans rapport.
 * `eclipse/` est hors git et contient des chemins absolus propres à la machine : il se recrée par
   `setupCrucible`, il ne se copie pas.
+* La compilation incrémentale est désactivée pour `:eclipse:cauldron` (`build.gradle`, bloc
+  `subprojects`) : recompilée seule, une classe Minecraft patchée trouvait le `MinecraftServer`
+  obfusqué du jar vanilla avant le bon. L'encodage des sources y est fixé à UTF-8.
+* Dans un script, ne pas juger un build sur la dernière ligne d'un `| tail` : c'est le code de
+  sortie de Gradle qui compte.
 * `.gitignore` ignore `*.sh` et `*.bat` : le script de lancement de la phase 1 et les scripts du banc
   de la phase 0 demandent une exception explicite.
 * La CI ne lance ni les tests ni la crate Rust : une régression du moteur passe le build sans bruit.
