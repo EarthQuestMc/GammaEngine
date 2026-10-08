@@ -238,7 +238,7 @@ public final class ServerHealth {
 
     private static String tps(double tps) {
         ChatColor colour = tps >= 19.0 ? ChatColor.GREEN : tps >= 15.0 ? ChatColor.YELLOW : ChatColor.RED;
-        return colour + (tps > 20.05 ? "*" : "") + String.format(Locale.ROOT, "%.1f", Math.min(20.0, tps));
+        return colour + (tps > 20.5 ? "*" : "") + String.format(Locale.ROOT, "%.1f", Math.min(20.0, tps));
     }
 
     private static String ms(double millis) {
