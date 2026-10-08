@@ -1,0 +1,5 @@
+# GammaEngine test server: only the keys that differ from the defaults.
+# Bukkit adds every other key on first start.
+settings:
+  # Load-test bots connect from one address: the per-address login throttle would refuse them.
+  connection-throttle: -1
