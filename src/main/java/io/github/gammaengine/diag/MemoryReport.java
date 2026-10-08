@@ -1,7 +1,5 @@
 package io.github.gammaengine.diag;
 
-import io.github.gammaengine.concurrent.ManagedPool;
-import io.github.gammaengine.concurrent.ThreadPools;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.WorldServer;
 
@@ -87,15 +85,6 @@ public final class MemoryReport {
             // entities and tile entities, which is why chunk count is the number that matters.
             out.append(String.format("    total            %5d chunks, %5d entities, %5d tile entities (~%s of block data)%n",
                     chunks, entities, tiles, mib(chunks * 70L * 1024L)));
-        }
-
-        ThreadPools pools = ThreadPools.get();
-        if (pools != null) {
-            int poolThreads = 0;
-            for (ManagedPool pool : pools.all()) {
-                poolThreads += pool.threads();
-            }
-            out.append(String.format("  Engine:    %d pool thread(s)%n", poolThreads));
         }
         return out.toString();
     }

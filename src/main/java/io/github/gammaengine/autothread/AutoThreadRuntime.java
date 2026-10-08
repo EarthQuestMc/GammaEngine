@@ -1,8 +1,6 @@
 package io.github.gammaengine.autothread;
 
 import io.github.gammaengine.GammaEngine;
-import io.github.gammaengine.concurrent.ManagedPool;
-import io.github.gammaengine.concurrent.ThreadPools;
 import io.github.gammaengine.config.GammaConfig;
 import io.github.gammaengine.platform.CpuTopology;
 import io.github.gammaengine.profiler.GammaProfiler;
@@ -19,7 +17,7 @@ import io.github.gammaengine.profiler.TickStatistics;
  *
  * <p>Boot order, which matters because each step depends on the previous one:
  * <ol>
- *   <li>{@link #boot()} while the server is starting: configuration, CPU topology, thread pools.</li>
+ *   <li>{@link #boot()} while the server is starting: configuration and the optional native library.</li>
  *   <li>{@link #onServerStarted()} once worlds exist: subsystems that need a world.</li>
  *   <li>{@link #onTickStart()} / {@link #onTickEnd()} around every server tick.</li>
  *   <li>{@link #shutdown()} before the server saves and exits.</li>
@@ -36,7 +34,6 @@ public final class AutoThreadRuntime {
     private volatile boolean running;
     private volatile boolean stopped;
     private volatile Thread mainThread;
-    private ThreadPools pools;
     private long tickStartNanos;
     private final java.util.List<Runnable> tickTasks = new java.util.concurrent.CopyOnWriteArrayList<Runnable>();
 
@@ -59,12 +56,10 @@ public final class AutoThreadRuntime {
         }
         mainThread = Thread.currentThread();
         GammaConfig.ensureLoaded();
-        pools = ThreadPools.initialize();
         io.github.gammaengine.nativeengine.NativeEngine.get().load();
         booted = true;
 
-        GammaEngine.LOGGER.info("{} AutoThread runtime ready ({}), simulation budget: {} worker(s) + main thread",
-                GammaEngine.NAME, CpuTopology.get(), pools.regionTick().threads());
+        GammaEngine.LOGGER.info("{} AutoThread runtime ready ({})", GammaEngine.NAME, CpuTopology.get());
         if (!GammaConfig.configs.gamma_autothread_enabled) {
             GammaEngine.LOGGER.warn("AutoThread parallelism is disabled in GammaAutoThread.yml: "
                     + "the server will simulate on a single thread, like upstream Crucible.");
@@ -149,9 +144,6 @@ public final class AutoThreadRuntime {
                 GammaProfiler.get().writeReport(report);
             }
         }
-        if (pools != null) {
-            pools.shutdown();
-        }
         GammaEngine.LOGGER.info("{} AutoThread runtime stopped", GammaEngine.NAME);
     }
 
@@ -172,10 +164,6 @@ public final class AutoThreadRuntime {
         return mainThread;
     }
 
-    public ThreadPools pools() {
-        return pools;
-    }
-
     /** Whether the runtime is allowed to run world work in parallel at all. */
     public boolean parallelismEnabled() {
         return booted && GammaConfig.configs.gamma_autothread_enabled;
@@ -194,12 +182,6 @@ public final class AutoThreadRuntime {
         TickStatistics.Mspt mspt = ticks.mspt();
         if (mspt != null) {
             out.append("  MSPT: ").append(mspt).append('\n');
-        }
-        if (pools != null) {
-            out.append("  Pools:\n");
-            for (ManagedPool pool : pools.all()) {
-                out.append("    ").append(pool).append('\n');
-            }
         }
         return out.toString();
     }

@@ -28,27 +28,6 @@ public class GammaConfig extends YamlConfig {
             "Only turn this off to compare against the baseline or to rule out AutoThread in a bug report."})
     public boolean gamma_autothread_enabled = true;
 
-    @Comments({"Maximum number of threads used for world simulation (region ticking).",
-            "0 = automatic: the runtime sizes it from the number of physical cores, never from SMT threads.",
-            "Raising this above the physical core count usually lowers p99 tick time instead of raising throughput."})
-    public int gamma_threads_simulation = 0;
-
-    @Comments({"Maximum number of threads used for chunk disk IO (read, write, compression).",
-            "0 = automatic."})
-    public int gamma_threads_chunkIo = 0;
-
-    @Comments({"Maximum number of threads used for chunk CPU work (NBT decode/encode, generation helpers).",
-            "0 = automatic."})
-    public int gamma_threads_chunkWorker = 0;
-
-    @Comments({"Maximum number of threads used for general asynchronous tasks and plugin async work.",
-            "0 = automatic."})
-    public int gamma_threads_async = 0;
-
-    @Comments({"Override of the detected physical core count.",
-            "0 = automatic detection. Only set this when running in a container that reports the host topology."})
-    public int gamma_threads_physicalCoresOverride = 0;
-
     @Comments({"Soft budget, in megabytes, for the caches the runtime is allowed to keep",
             "(chunk snapshots waiting to be written, learning profiles, pending region state).",
             "The runtime trims its caches when it goes over; it never hard-fails on this limit."})

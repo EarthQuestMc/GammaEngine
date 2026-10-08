@@ -4,8 +4,6 @@ import io.github.gammaengine.GammaEngine;
 import io.github.gammaengine.autothread.AutoThreadRuntime;
 import io.github.gammaengine.bench.BenchmarkSpec;
 import io.github.gammaengine.bench.WorldBenchmark;
-import io.github.gammaengine.concurrent.ManagedPool;
-import io.github.gammaengine.concurrent.ThreadPools;
 import io.github.gammaengine.profiler.GammaProfiler;
 import io.github.gammaengine.profiler.LatencyHistogram;
 import io.github.gammaengine.profiler.TickStatistics;
@@ -21,8 +19,8 @@ import java.util.Map;
  * {@code /autothread}: the operator-facing window into the runtime.
  *
  * <p>The command answers questions in the order an administrator actually asks them: is the server
- * healthy ({@code status}), where is the time going ({@code profile}), what is the runtime fighting
- * with ({@code conflicts}), and are the workers saturated ({@code workers}).
+ * healthy ({@code status}), where is the time going ({@code profile}), and where is the memory
+ * ({@code memory}).
  */
 public class AutoThreadCommand extends Command {
     public AutoThreadCommand() {
@@ -31,7 +29,6 @@ public class AutoThreadCommand extends Command {
         setUsage(ChatColor.translateAlternateColorCodes('&',
                 "&7&m----------------&7[&bAutoThread&7]&m----------------\n"
                         + "&b  >&e /autothread status &7-&a runtime state, TPS and MSPT.\n"
-                        + "&b  >&e /autothread workers &7-&a thread pool occupancy.\n"
                         + "&b  >&e /autothread regions &7-&a active regions and their owners.\n"
                         + "&b  >&e /autothread conflicts &7-&a observed access conflicts.\n"
                         + "&b  >&e /autothread native &7-&a native engine state.\n"
@@ -54,8 +51,6 @@ public class AutoThreadCommand extends Command {
         String action = args[0].toLowerCase();
         if ("status".equals(action)) {
             sendLines(sender, AutoThreadRuntime.get().statusText());
-        } else if ("workers".equals(action)) {
-            workers(sender);
         } else if ("regions".equals(action)) {
             regions(sender);
         } else if ("conflicts".equals(action)) {
@@ -73,24 +68,6 @@ public class AutoThreadCommand extends Command {
             sender.sendMessage(usageMessage);
         }
         return true;
-    }
-
-    private void workers(CommandSender sender) {
-        ThreadPools pools = ThreadPools.get();
-        if (pools == null) {
-            sender.sendMessage(ChatColor.RED + "AutoThread runtime has not booted yet.");
-            return;
-        }
-        sender.sendMessage(ChatColor.AQUA + "Thread pools (" + pools.physicalCores() + " physical cores):");
-        for (ManagedPool pool : pools.all()) {
-            LatencyHistogram.Snapshot wait = pool.queueWaitHistogram().snapshot();
-            LatencyHistogram.Snapshot exec = pool.executionHistogram().snapshot();
-            sender.sendMessage(String.format(ChatColor.GRAY + "  %-12s " + ChatColor.WHITE
-                            + "%d thr, %d active, %d queued, %d done" + ChatColor.GRAY
-                            + " | wait p95 %.2fms | exec p95 %.2fms",
-                    pool.name(), pool.threads(), pool.activeThreads(), pool.queueDepth(),
-                    pool.completedTasks(), wait.p95Millis(), exec.p95Millis()));
-        }
     }
 
     private void regions(CommandSender sender) {
