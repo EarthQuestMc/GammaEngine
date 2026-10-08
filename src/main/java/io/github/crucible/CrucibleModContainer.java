@@ -96,7 +96,10 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
         evt.registerServerCommand("heapdump", new io.github.gammaengine.command.HeapDumpCommand());
         evt.registerServerCommand("autothread", new io.github.gammaengine.command.AutoThreadCommand()); // GammaEngine
         CrucibleAPI.registerModPlugin(this);
-        metrics = new Metrics(this, 6555);
+        if (io.github.gammaengine.config.GammaConfig.configs.gamma_legacy_metrics) {
+            // GammaEngine - bStats posts under Crucible's project id: only when asked for
+            metrics = new Metrics(this, 6555);
+        }
     }
 
     @Override

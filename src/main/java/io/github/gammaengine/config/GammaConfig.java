@@ -42,6 +42,11 @@ public class GammaConfig extends YamlConfig {
             "compare runs made with the same setting. Costs one field read per object while off."})
     public boolean gamma_bench_attribution = false;
 
+    @Comments({"Inherited telemetry: Spigot's MCStats (mcstats.org) and Crucible's bStats (bStats.org, under",
+            "Crucible's project id). Each runs a timer thread and posts server statistics over the network.",
+            "Off: neither is created and nothing is sent. true restores the inherited behaviour."})
+    public boolean gamma_legacy_metrics = false;
+
     @Comments({"Allow the native (Rust) engine to be loaded when the library is present.",
             "When it is missing or fails to load, the server automatically falls back to the Java",
             "implementations, so turning this off only costs performance, never compatibility."})
