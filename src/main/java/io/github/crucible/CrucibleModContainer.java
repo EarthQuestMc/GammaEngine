@@ -113,6 +113,7 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
                 "io.github.gammaengine.autothread",
                 "io.github.gammaengine.command",
                 "io.github.gammaengine.config",
+                "io.github.gammaengine.metrics",
                 "io.github.gammaengine.nativeengine",
                 "io.github.gammaengine.platform",
                 "io.github.gammaengine.profiler"

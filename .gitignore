@@ -51,7 +51,7 @@ native/target/
 
 # Local test server
 /run/
-/test-server/
+/test-server*/
 
 # Scripts of the project's own tools are versioned, unlike stray *.sh and *.bat
 !tools/**/*.sh

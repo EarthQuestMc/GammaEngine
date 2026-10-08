@@ -4,6 +4,7 @@ import io.github.gammaengine.GammaEngine;
 import io.github.gammaengine.autothread.AutoThreadRuntime;
 import io.github.gammaengine.bench.BenchmarkSpec;
 import io.github.gammaengine.bench.WorldBenchmark;
+import io.github.gammaengine.metrics.BenchRecorder;
 import io.github.gammaengine.profiler.GammaProfiler;
 import io.github.gammaengine.profiler.LatencyHistogram;
 import io.github.gammaengine.profiler.TickStatistics;
@@ -31,6 +32,7 @@ public class AutoThreadCommand extends Command {
                         + "&b  >&e /autothread native &7-&a native engine state.\n"
                         + "&b  >&e /autothread profile start|stop|report &7-&a profiling session.\n"
                         + "&b  >&e /autothread bench start|stop &7-&a synthetic load benchmark.\n"
+                        + "&b  >&e /autothread record start [name]|stop|status &7-&a record every tick to gammaengine/bench.\n"
                         + "&b  >&e /autothread memory [gc] &7-&a heap, off-heap and world memory."));
         setPermission("gammaengine.autothread");
     }
@@ -54,6 +56,8 @@ public class AutoThreadCommand extends Command {
             profile(sender, args);
         } else if ("bench".equals(action)) {
             bench(sender, args);
+        } else if ("record".equals(action)) {
+            record(sender, args);
         } else if ("memory".equals(action) || "mem".equals(action)) {
             boolean collect = args.length > 1 && ("gc".equalsIgnoreCase(args[1]) || "collect".equalsIgnoreCase(args[1]));
             sendLines(sender, io.github.gammaengine.diag.MemoryReport.text(collect));
@@ -126,6 +130,31 @@ public class AutoThreadCommand extends Command {
         });
         if (error != null) {
             sender.sendMessage(ChatColor.RED + error);
+        }
+    }
+
+    /** Tick and GC recording for the bench: the orchestrator drives it from the server console. */
+    private void record(CommandSender sender, String[] args) {
+        BenchRecorder recorder = BenchRecorder.get();
+        String sub = args.length > 1 ? args[1].toLowerCase() : "status";
+        if ("start".equals(sub)) {
+            String error = recorder.start(args.length > 2 ? args[2] : "run");
+            if (error == null) {
+                sender.sendMessage(ChatColor.GREEN + "Recording every tick to " + recorder.directory());
+            } else {
+                sender.sendMessage(ChatColor.RED + error);
+            }
+        } else if ("stop".equals(sub)) {
+            String summary = recorder.stop();
+            sender.sendMessage(summary == null
+                    ? ChatColor.YELLOW + "No recording is running."
+                    : ChatColor.GREEN + "Recording stopped: " + ChatColor.WHITE + summary);
+        } else if ("status".equals(sub)) {
+            sender.sendMessage(recorder.isRecording()
+                    ? ChatColor.GREEN + "Recording to " + recorder.directory()
+                    : ChatColor.GRAY + "No recording is running.");
+        } else {
+            sender.sendMessage(ChatColor.GRAY + "Usage: /autothread record start [name]|stop|status");
         }
     }
 

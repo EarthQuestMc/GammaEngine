@@ -30,6 +30,11 @@ public class GammaConfig extends YamlConfig {
     @Comment("Start collecting a profiling session as soon as the server finishes booting.")
     public boolean gamma_profiling_enabledAtStartup = false;
 
+    @Comments({"Record every tick and every garbage collection from server start to stop, for the bench:",
+            "gammaengine/bench/startup-<date>/ticks.csv, gc.csv and summary.json.",
+            "/autothread record start|stop does the same on demand. Costs nothing while off."})
+    public boolean gamma_bench_export = false;
+
     @Comments({"Allow the native (Rust) engine to be loaded when the library is present.",
             "When it is missing or fails to load, the server automatically falls back to the Java",
             "implementations, so turning this off only costs performance, never compatibility."})

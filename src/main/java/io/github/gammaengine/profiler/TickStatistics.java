@@ -92,18 +92,7 @@ public final class TickStatistics {
      * @return {@code null} when no tick has been recorded yet
      */
     public Mspt mspt() {
-        int size = recorded;
-        if (size == 0) {
-            return null;
-        }
-        long[] copy = Arrays.copyOf(durations, size);
-        Arrays.sort(copy);
-        long sum = 0;
-        for (long value : copy) {
-            sum += value;
-        }
-        return new Mspt(size, (double) sum / size, pick(copy, 50), pick(copy, 95), pick(copy, 99),
-                copy[copy.length - 1]);
+        return Mspt.of(durations, recorded);
     }
 
     private static long pick(long[] sorted, double percentile) {
@@ -133,6 +122,25 @@ public final class TickStatistics {
             this.p95Nanos = p95Nanos;
             this.p99Nanos = p99Nanos;
             this.maxNanos = maxNanos;
+        }
+
+        /**
+         * Exact summary of the first {@code count} tick durations, in nanoseconds.
+         *
+         * @return {@code null} when {@code count} is zero
+         */
+        public static Mspt of(long[] durationsNanos, int count) {
+            if (count == 0) {
+                return null;
+            }
+            long[] copy = Arrays.copyOf(durationsNanos, count);
+            Arrays.sort(copy);
+            long sum = 0;
+            for (long value : copy) {
+                sum += value;
+            }
+            return new Mspt(count, (double) sum / count, pick(copy, 50), pick(copy, 95), pick(copy, 99),
+                    copy[copy.length - 1]);
         }
 
         public int samples() {

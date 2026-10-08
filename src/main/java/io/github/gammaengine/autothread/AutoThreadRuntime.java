@@ -2,6 +2,7 @@ package io.github.gammaengine.autothread;
 
 import io.github.gammaengine.GammaEngine;
 import io.github.gammaengine.config.GammaConfig;
+import io.github.gammaengine.metrics.BenchRecorder;
 import io.github.gammaengine.platform.CpuTopology;
 import io.github.gammaengine.profiler.GammaProfiler;
 import io.github.gammaengine.profiler.TickStatistics;
@@ -76,6 +77,14 @@ public final class AutoThreadRuntime {
             GammaProfiler.get().startSession();
             GammaEngine.LOGGER.info("Profiling session started automatically (gamma.profiling.enabledAtStartup)");
         }
+        if (GammaConfig.configs.gamma_bench_export) {
+            String error = BenchRecorder.get().start("startup");
+            if (error == null) {
+                GammaEngine.LOGGER.info("Bench recording started in {} (gamma.bench.export)", BenchRecorder.get().directory());
+            } else {
+                GammaEngine.LOGGER.warn(error);
+            }
+        }
     }
 
     /**
@@ -117,6 +126,7 @@ public final class AutoThreadRuntime {
         GammaProfiler profiler = GammaProfiler.get();
         profiler.ticks().recordTick(duration);
         profiler.record("server.tick", duration);
+        BenchRecorder.get().onTick(duration);
     }
 
     /**
@@ -132,6 +142,10 @@ public final class AutoThreadRuntime {
         }
         stopped = true;
         running = false;
+        String recording = BenchRecorder.get().stop();
+        if (recording != null) {
+            GammaEngine.LOGGER.info("Bench recording stopped: {}", recording);
+        }
         if (GammaProfiler.get().sessionActive()) {
             String report = GammaProfiler.get().stopSession();
             if (report != null) {
