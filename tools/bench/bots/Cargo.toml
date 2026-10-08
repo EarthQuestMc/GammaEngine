@@ -1,0 +1,15 @@
+[package]
+name = "gamma-bots"
+description = "Load bots for the GammaEngine bench: Minecraft 1.7.10 Forge clients that join, stay and move"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "gamma-bots"
+path = "src/main.rs"
+
+[dependencies]
+gammaengine-protocol = { path = "../protocol" }

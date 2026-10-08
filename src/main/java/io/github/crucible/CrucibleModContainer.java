@@ -89,10 +89,17 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
 
     @Subscribe
     public void serverStarting(FMLServerStartingEvent evt) {
-        evt.registerServerCommand("gamma", new CrucibleCommand(evt.getServer()));
+        // GammaEngine - direct commands instead of the /gamma (alias /crucible) subcommands
+        evt.registerServerCommand("mods", new io.github.gammaengine.command.ModsCommand());
+        evt.registerServerCommand("chunks", new io.github.gammaengine.command.ChunksCommand());
+        evt.registerServerCommand("findchunks", new io.github.gammaengine.command.FindChunksCommand());
+        evt.registerServerCommand("heapdump", new io.github.gammaengine.command.HeapDumpCommand());
         evt.registerServerCommand("autothread", new io.github.gammaengine.command.AutoThreadCommand()); // GammaEngine
         CrucibleAPI.registerModPlugin(this);
-        metrics = new Metrics(this, 6555);
+        if (io.github.gammaengine.config.GammaConfig.configs.gamma_legacy_metrics) {
+            // GammaEngine - bStats posts under Crucible's project id: only when asked for
+            metrics = new Metrics(this, 6555);
+        }
     }
 
     @Override
@@ -111,12 +118,17 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
                 // package ownership checks and the Bukkit plugin bridge see them as first-party.
                 "io.github.gammaengine",
                 "io.github.gammaengine.autothread",
+                "io.github.gammaengine.bench",
                 "io.github.gammaengine.command",
-                "io.github.gammaengine.concurrent",
                 "io.github.gammaengine.config",
+                "io.github.gammaengine.diag",
+                "io.github.gammaengine.metrics",
                 "io.github.gammaengine.nativeengine",
+                "io.github.gammaengine.network",
                 "io.github.gammaengine.platform",
-                "io.github.gammaengine.profiler"
+                "io.github.gammaengine.profiler",
+                "io.github.gammaengine.util",
+                "io.github.gammaengine.world"
         );
     }
 

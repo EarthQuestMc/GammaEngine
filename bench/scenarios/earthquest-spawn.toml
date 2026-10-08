@@ -1,0 +1,43 @@
+# Bots grouped at the spawn of the EarthQuest server, with its mods and plugins: the realistic
+# counterpart of spawn-groupe. Needs the EarthQuest server folder filled in (mods/, plugins/,
+# config/ and the world); point pack and world elsewhere with --set server.pack=... if needed.
+# Format and every key with its default: docs/banc-de-test.md.
+
+name = "earthquest-spawn"
+description = "Bots immobiles au point d'apparition, modpack et monde d'EarthQuest"
+repetitions = 1
+
+[server]
+dir = "test-server-orch"
+jar = ""
+java = "java"
+heap = "4G"
+gc = ""
+gc_log = false
+jvm_args = []
+port = 25570
+pack = "~/Documents/Projet/EarthQuest/Serveur"
+# Fill in once the world is in place: run --dry-run prints its fingerprint.
+world = ""
+world_sha256 = ""
+# A modpack takes longer to start than an empty server.
+startup_timeout = 600
+
+[server.properties]
+view-distance = 8
+
+[bots]
+count = 20
+rate = 5.0
+behaviour = "idle"
+prefix = "bot"
+seed = 1
+
+[measure]
+warmup = 60
+duration = 120
+attribution = true
+
+[console]
+at_start = ["gamerule doDaylightCycle false", "time set 6000", "weather clear 1000000"]
+after_arrival = []

@@ -11,6 +11,7 @@ import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -103,8 +104,8 @@ public final class GammaProfiler {
         long ticks = tickStatistics.totalTicks() - sessionStartTicks;
 
         out.append("=== ").append(GammaEngine.NAME).append(" profiling report ===\n");
-        out.append(String.format("Duration: %.1f s over %d ticks%n", durationMillis / 1000.0, ticks));
-        out.append(String.format("TPS: %.2f (1m) %.2f (5m) %.2f (15m)%n",
+        out.append(String.format(Locale.ROOT, "Duration: %.1f s over %d ticks%n", durationMillis / 1000.0, ticks));
+        out.append(String.format(Locale.ROOT, "TPS: %.2f (1m) %.2f (5m) %.2f (15m)%n",
                 tickStatistics.tps1m(), tickStatistics.tps5m(), tickStatistics.tps15m()));
 
         TickStatistics.Mspt mspt = tickStatistics.mspt();
@@ -116,7 +117,7 @@ public final class GammaProfiler {
         if (!snapshots.isEmpty()) {
             out.append("\nTime by subsystem (total cost first):\n");
             for (LatencyHistogram.Snapshot snapshot : snapshots) {
-                out.append(String.format("  %-38s n=%-10d total=%10.1fms mean=%7.3fms p95=%7.3fms p99=%7.3fms max=%8.3fms%n",
+                out.append(String.format(Locale.ROOT, "  %-38s n=%-10d total=%10.1fms mean=%7.3fms p95=%7.3fms p99=%7.3fms max=%8.3fms%n",
                         snapshot.name(), snapshot.count(), snapshot.totalMillis(), snapshot.meanMillis(),
                         snapshot.p95Millis(), snapshot.p99Millis(), snapshot.maxMillis()));
             }
@@ -126,7 +127,7 @@ public final class GammaProfiler {
         if (!counters.isEmpty()) {
             out.append("\nCounters:\n");
             for (Map.Entry<String, Long> entry : counters.entrySet()) {
-                out.append(String.format("  %-38s %d%n", entry.getKey(), entry.getValue()));
+                out.append(String.format(Locale.ROOT, "  %-38s %d%n", entry.getKey(), entry.getValue()));
             }
         }
         return out.toString();

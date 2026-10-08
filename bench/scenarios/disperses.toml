@@ -1,0 +1,44 @@
+# Bots spread over a wide radius by spreadplayers, then wandering around their new spot: number
+# of loaded chunks and time per chunk. Phases 4 and 6 depend on it.
+# Chunk generation at the new spots runs during the warm-up: keep the warm-up long enough for it
+# to end before the measure, or the measure includes it.
+# Format and every key with its default: docs/banc-de-test.md.
+
+name = "disperses"
+description = "Bots dispersés sur un grand rayon, en errance autour de leur point d'arrivée"
+repetitions = 1
+
+[server]
+dir = "test-server-orch"
+jar = ""
+java = "java"
+heap = "1G"
+gc = ""
+gc_log = false
+jvm_args = []
+port = 25570
+world = ""
+world_sha256 = ""
+
+[server.properties]
+view-distance = 6
+
+[bots]
+count = 20
+rate = 5.0
+behaviour = "wander"
+prefix = "bot"
+seed = 1
+wander_radius = 16
+wander_height = 0
+
+[measure]
+warmup = 60
+duration = 60
+attribution = false
+
+[console]
+at_start = ["gamerule doDaylightCycle false", "time set 6000", "weather clear 1000000"]
+# Centre x z, at least 64 blocks between players, within 384 blocks of the centre. {bots} is
+# replaced by the names of the bots in game: @a moves nobody from this server's console.
+after_arrival = ["spreadplayers 0 0 64 384 false {bots}"]

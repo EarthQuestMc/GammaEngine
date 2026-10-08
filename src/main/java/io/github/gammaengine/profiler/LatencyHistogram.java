@@ -1,5 +1,6 @@
 package io.github.gammaengine.profiler;
 
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
 
@@ -199,7 +200,7 @@ public final class LatencyHistogram {
 
         @Override
         public String toString() {
-            return String.format("%s: n=%d mean=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms max=%.2fms",
+            return String.format(Locale.ROOT, "%s: n=%d mean=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms max=%.2fms",
                     name, count, meanMillis(), p50Millis(), p95Millis(), p99Millis(), maxMillis());
         }
     }

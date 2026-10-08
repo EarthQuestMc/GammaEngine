@@ -10,49 +10,14 @@ import io.github.gammaengine.GammaEngine;
 import java.io.File;
 
 /**
- * Administrator-facing configuration of the AutoThread runtime, stored in {@code GammaAutoThread.yml}.
+ * Administrator-facing configuration of the engine, stored in {@code gammaengine.yml}.
  *
- * <p>The design rule of this file is that it contains resource limits and diagnostics switches,
- * and nothing else. There is deliberately no way to declare a mod thread-safe, to pin a plugin to
- * a thread, or to pick a threading mode: those decisions belong to the runtime, which observes
- * what the code actually does, and an administrator guessing them wrong would corrupt worlds.
- *
- * <p>Zero means "decide automatically" for every sizing option.
+ * <p>Every option is optional: the server must run with no file at all. Each optimisation gets its
+ * own switch here. There is deliberately no way to declare a mod thread-safe or to list mods: the
+ * engine handles any jar by itself, and an administrator guessing wrong would corrupt worlds.
  */
 public class GammaConfig extends YamlConfig {
     public static final GammaConfig configs = new GammaConfig();
-
-    @Comments({"Master switch for the AutoThread runtime.",
-            "When false the server behaves exactly like upstream Crucible: single simulation thread,",
-            "no region ownership, no parallel ticking. Metrics and profiling keep working.",
-            "Only turn this off to compare against the baseline or to rule out AutoThread in a bug report."})
-    public boolean gamma_autothread_enabled = true;
-
-    @Comments({"Maximum number of threads used for world simulation (region ticking).",
-            "0 = automatic: the runtime sizes it from the number of physical cores, never from SMT threads.",
-            "Raising this above the physical core count usually lowers p99 tick time instead of raising throughput."})
-    public int gamma_threads_simulation = 0;
-
-    @Comments({"Maximum number of threads used for chunk disk IO (read, write, compression).",
-            "0 = automatic."})
-    public int gamma_threads_chunkIo = 0;
-
-    @Comments({"Maximum number of threads used for chunk CPU work (NBT decode/encode, generation helpers).",
-            "0 = automatic."})
-    public int gamma_threads_chunkWorker = 0;
-
-    @Comments({"Maximum number of threads used for general asynchronous tasks and plugin async work.",
-            "0 = automatic."})
-    public int gamma_threads_async = 0;
-
-    @Comments({"Override of the detected physical core count.",
-            "0 = automatic detection. Only set this when running in a container that reports the host topology."})
-    public int gamma_threads_physicalCoresOverride = 0;
-
-    @Comments({"Soft budget, in megabytes, for the caches the runtime is allowed to keep",
-            "(chunk snapshots waiting to be written, learning profiles, pending region state).",
-            "The runtime trims its caches when it goes over; it never hard-fails on this limit."})
-    public int gamma_memory_budgetMb = 512;
 
     @Comments({"Deflate level used for chunk packets sent to clients, 1 to 9.",
             "Measured on chunk-shaped data: level 1 is 70% faster than level 4 and produces 3.7% more",
@@ -65,35 +30,61 @@ public class GammaConfig extends YamlConfig {
     @Comment("Start collecting a profiling session as soon as the server finishes booting.")
     public boolean gamma_profiling_enabledAtStartup = false;
 
-    @Comments({"How often, in seconds, repeated diagnostics are aggregated into a single summary line.",
-            "A busy server can produce hundreds of thousands of identical conflict reports; without",
-            "aggregation the log becomes the bottleneck. 0 disables aggregation (debug only)."})
-    public int gamma_logging_aggregationSeconds = 60;
+    @Comments({"Record every tick and every garbage collection from server start to stop, for the bench:",
+            "gammaengine/bench/startup-<date>/ticks.csv, gc.csv and summary.json.",
+            "/autothread record start|stop does the same on demand. Costs nothing while off."})
+    public boolean gamma_bench_export = false;
 
-    @Comment("Log every AutoThread decision. Extremely verbose, for development only.")
-    public boolean gamma_logging_verbose = false;
+    @Comments({"Level 2 of the bench: every recording also times each entity and tile entity tick, charges it",
+            "to its class, its mod or plugin and its chunk, and writes mods.csv and chunks.csv next to ticks.csv.",
+            "/autothread record start <name> attribution does the same for one recording.",
+            "Costs two nanoTime calls per ticked object while a recording runs, which inflates the MSPT:",
+            "compare runs made with the same setting. Costs one field read per object while off."})
+    public boolean gamma_bench_attribution = false;
+
+    @Comments({"Inherited telemetry: Spigot's MCStats (mcstats.org) and Crucible's bStats (bStats.org, under",
+            "Crucible's project id). Each runs a timer thread and posts server statistics over the network.",
+            "Off: neither is created and nothing is sent. true restores the inherited behaviour."})
+    public boolean gamma_legacy_metrics = false;
 
     @Comments({"Allow the native (Rust) engine to be loaded when the library is present.",
             "When it is missing or fails to load, the server automatically falls back to the Java",
             "implementations, so turning this off only costs performance, never compatibility."})
     public boolean gamma_native_enabled = true;
 
+    @Comments({"Startup library check: remember the size, date and MD5 of every library jar that passed, in",
+            "libraries/.gammaengine-library-check, and do not hash a jar again while its size, its date and its",
+            ".md5 file are unchanged (about 100 MB read on every boot otherwise). A changed jar is always",
+            "hashed again; a missing or damaged cache file just means a full check. false hashes every jar on",
+            "every boot. Read before the libraries are loaded, by a small reader of this file, so",
+            "-Dgammaengine.libraryCheckCache=false (or a line in inject.properties) works even if it is broken."})
+    public boolean gamma_startup_libraryCheckCache = true;
+
     private GammaConfig() {
-        CONFIG_FILE = new File("GammaAutoThread.yml");
+        CONFIG_FILE = new File("gammaengine.yml");
         CONFIG_MODE = ConfigMode.PATH_BY_UNDERSCORE;
         CONFIG_HEADER = new String[]{
-                "GammaEngine AutoThread configuration",
+                "GammaEngine configuration",
                 "",
-                "This file only contains resource limits and diagnostics. The AutoThread runtime decides",
-                "by itself which mod, plugin, entity or tile entity code can run in parallel, by observing",
-                "what that code actually touches at runtime. There is nothing to declare here per mod."
+                "Every option is optional: the server runs with no configuration at all.",
+                "Each optimisation has its own switch, so it can be turned off on its own.",
+                "There is nothing to declare per mod or per plugin."
         };
+        migrateLegacyFile();
 
         try {
             init();
             save(); // rewrite the file so new options appear after an update
         } catch (InvalidConfigurationException e) {
-            GammaEngine.LOGGER.error("Failed to load GammaAutoThread.yml, falling back to defaults", e);
+            GammaEngine.LOGGER.error("Failed to load gammaengine.yml, falling back to defaults", e);
+        }
+    }
+
+    /** Carries over {@code GammaAutoThread.yml}, the name used by earlier builds; option paths did not change. */
+    private void migrateLegacyFile() {
+        File legacy = new File("GammaAutoThread.yml");
+        if (legacy.isFile() && !CONFIG_FILE.exists() && !legacy.renameTo(CONFIG_FILE)) {
+            GammaEngine.LOGGER.warn("Could not rename {} to {}, starting from defaults", legacy, CONFIG_FILE);
         }
     }
 

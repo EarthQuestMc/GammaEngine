@@ -51,3 +51,11 @@ native/target/
 
 # Local test server
 /run/
+/test-server*/
+
+# Bench results: bench/scenarios is versioned, what the orchestrator writes is not
+/bench/results/
+
+# Scripts of the project's own tools are versioned, unlike stray *.sh and *.bat
+!tools/**/*.sh
+!tools/**/*.bat

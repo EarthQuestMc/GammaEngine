@@ -7,7 +7,7 @@ fichier et sa ligne.
 
 La conclusion d'abord : **la boucle de tick n'est pas le premier mur.** Trois coûts qui croissent
 plus vite que le nombre de joueurs arrivent avant, et aucun n'était dans la feuille de route
-initiale. Ils sont maintenant les phases 2B et 11.
+initiale. Ils sont traités par les phases 5, 6 et 7 de la [feuille de route](roadmap.md).
 
 ## Le budget
 
@@ -165,28 +165,22 @@ plus efficace au moins efficace :
 
 ## Ce que cela change dans le plan
 
-Déjà couvert par les phases existantes : tick parallèle par régions, chargement et sauvegarde
-asynchrones des chunks, compresseur natif, détection de conflits.
+Où chaque correctif se place dans la [feuille de route](roadmap.md) :
 
-**Manquant, et maintenant ajouté :**
-
-| Manque | Où il va |
+| Correctif | Phase |
 | --- | --- |
-| Tracking d'entités indexé par chunk | Phase 2B |
-| Cache partagé de charge utile, compression hors thread et niveau réglé | Phase 2B |
-| Budget d'envoi de chunks par joueur et contre-pression sur clients lents | Phase 2B |
-| Sauvegarde continue étalée, données joueur asynchrones | Phase 2B |
-| Distance de vue et de simulation adaptatives pilotées par le runtime | Phase 11 |
-| Caps de mobs, throttling des TileEntities, fusion d'items sous pression | Phase 11 |
-| Comptabilité des coûts par joueur, par mod et par plugin | Phase 11 |
-| Réduction des allocations du chemin de streaming, budget mémoire des caches | Transverse |
-| Configuration GC documentée par taille de tas | Transverse |
+| Coût par joueur, par mod et par chunk mesuré avant tout changement | 0 |
+| Tracking d'entités indexé par chunk, calculé en phase parallèle en lecture seule | 5 |
+| Cache partagé de charge utile, compression hors thread et niveau réglé | 5 |
+| Budget d'envoi de chunks par joueur et contre-pression sur clients lents | 6 |
+| Distance de vue adaptative, distance de simulation séparée | 4 et 6 |
+| Sauvegarde continue étalée, données joueur hors thread | 7 |
+| Caps de mobs, ralentissement adaptatif des TileEntities | 4 |
+| Réduction des allocations du chemin de streaming, pauses GC | 1 et 5 |
 
-La phase 2B est volontairement placée avant le travail sur les régions. Elle n'a besoin d'aucun
-modèle de propriété, d'aucun suivi d'accès et d'aucun tick parallèle : c'est du travail purement
-algorithmique sur des chemins aujourd'hui quadratiques, et c'est rentable dès le serveur monothread.
-La faire en premier rend aussi le travail parallèle qui suit plus facile à mesurer, parce que le
-bruit qu'elle supprime est plus gros que les gains qu'elle masquerait.
+Rien de cela ne demande de tick par régions : c'est du travail algorithmique sur des chemins
+aujourd'hui quadratiques, rentable dès le serveur monothread, et c'est pourquoi le tick par régions
+vient en dernier (phase 11).
 
 ## Politique de dégradation, ou comment un serveur refuse de descendre sous 20 TPS
 
@@ -206,7 +200,7 @@ règle quoi que ce soit par mod, c'est la même règle que dans tout le reste du
 ## Verdict honnête sur 400 joueurs
 
 250 joueurs sur un gros modpack à 20 TPS avec un p95 sous 50 ms est un objectif raisonnable sur ce
-matériel une fois les phases 1, 2, 2B et 5 en place.
+matériel une fois les phases 1 à 7 en place.
 
 400 joueurs sur le même modpack et la même machine est un objectif d'étirement, et la raison tient
 de l'arithmétique plus que de l'ambition : à 0,75 cœur-ms par joueur et par tick, le budget par

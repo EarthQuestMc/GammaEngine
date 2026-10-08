@@ -1,0 +1,6 @@
+# GammaEngine test server: only the keys that differ from the defaults.
+# The server adds every other key on first start.
+thermos:
+  logging:
+    # One log line with the full mod list per joining client floods the log under load tests.
+    clientModList: false

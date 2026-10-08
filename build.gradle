@@ -216,6 +216,14 @@ publishing {
 var actualProject = project
 subprojects {
     if (project.name.contains('cauldron')) {
+        // GammaEngine - incremental compilation recompiles a patched Minecraft class on its own and then
+        // resolves MinecraftServer from the obfuscated vanilla jar on the classpath, which fails; compile the
+        // whole project every time instead. UTF-8 so a Windows build reads the sources like the Linux CI.
+        tasks.withType(JavaCompile).configureEach {
+            options.incremental = false
+            options.encoding = 'UTF-8'
+        }
+
         // Here we are presented with an annoying situation. We need to configure the javadoc task within the cauldron project.
         // However we can't modify the build gradle directly... Besides this "solution" a better alternative would be the following:
         // * Create a cauldron.gradle file at the root of the project that will be appended over the generated file

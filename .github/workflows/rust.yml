@@ -1,0 +1,106 @@
+name: Rust build and tests
+
+# Kept apart from the Gradle workflow: it only runs when Rust code changes, it needs
+# a different toolchain and OS matrix, and its result is reported on its own.
+on:
+  push:
+    branches:
+      - dev
+      - main
+    paths:
+      - 'native/**'
+      - 'tools/bench/**'
+      - '.github/workflows/rust.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'native/**'
+      - 'tools/bench/**'
+      - '.github/workflows/rust.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The optional native library (cdylib loaded by the server through JNI).
+  native:
+    name: native (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: native
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+
+      # Lints do not depend on the OS: run them once.
+      - name: Clippy
+        if: runner.os == 'Linux'
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build release
+        run: cargo build --release --locked
+
+  # Load-test bots. Every step is skipped while tools/bench does not exist.
+  bench:
+    name: bench tools
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: tools/bench
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        if: hashFiles('tools/bench/Cargo.toml') != ''
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        if: hashFiles('tools/bench/Cargo.toml') != ''
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/bench
+
+      - name: Test
+        if: hashFiles('tools/bench/Cargo.toml') != ''
+        run: cargo test --workspace --locked
+
+      - name: Build release
+        if: hashFiles('tools/bench/Cargo.toml') != ''
+        run: cargo build --workspace --release --locked

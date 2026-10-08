@@ -1,0 +1,39 @@
+# Bots flying in straight lines over new terrain: chunk loading, generation and sending.
+# Phase 6 depends on it. Every run starts from a fresh world, so the terrain is always new.
+# Format and every key with its default: docs/banc-de-test.md.
+
+name = "exploration"
+description = "Bots en vol en ligne droite au-dessus de terrain neuf"
+repetitions = 1
+
+[server]
+dir = "test-server-orch"
+jar = ""
+java = "java"
+heap = "2G"
+gc = ""
+gc_log = false
+jvm_args = []
+port = 25570
+world = ""
+world_sha256 = ""
+
+[server.properties]
+view-distance = 8
+
+[bots]
+count = 10
+rate = 5.0
+behaviour = "explore"
+prefix = "bot"
+seed = 1
+fly_height = 100
+
+[measure]
+warmup = 30
+duration = 60
+attribution = false
+
+[console]
+at_start = ["gamerule doDaylightCycle false", "time set 6000", "weather clear 1000000"]
+after_arrival = []

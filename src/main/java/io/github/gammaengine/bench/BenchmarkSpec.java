@@ -1,5 +1,7 @@
 package io.github.gammaengine.bench;
 
+import java.util.Locale;
+
 /**
  * Parameters of one benchmark run.
  *
@@ -87,7 +89,7 @@ public final class BenchmarkSpec {
 
     @Override
     public String toString() {
-        return String.format("%s: %d chunks (radius %d), %d entities, %d tile entities, %d ticks",
+        return String.format(Locale.ROOT, "%s: %d chunks (radius %d), %d entities, %d tile entities, %d ticks",
                 name, chunkCount(), chunkRadius, entities, tileEntities, ticks);
     }
 }

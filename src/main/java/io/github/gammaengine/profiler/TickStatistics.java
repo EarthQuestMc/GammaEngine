@@ -1,6 +1,7 @@
 package io.github.gammaengine.profiler;
 
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Rolling tick statistics: TPS over three windows and MSPT percentiles over the last minute.
@@ -21,6 +22,7 @@ public final class TickStatistics {
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
 
     private final long[] durations = new long[WINDOW_TICKS];
+    private final long[] endTimes = new long[WINDOW_TICKS];
     private volatile int recorded;
     private int cursor;
 
@@ -36,14 +38,19 @@ public final class TickStatistics {
      * @param durationNanos time spent inside the tick itself, excluding the sleep that follows it
      */
     public void recordTick(long durationNanos) {
+        recordTick(durationNanos, System.nanoTime());
+    }
+
+    /** Same as {@link #recordTick(long)}, with the tick end time given, for tests. */
+    void recordTick(long durationNanos, long now) {
         durations[cursor] = durationNanos;
+        endTimes[cursor] = now;
         cursor = (cursor + 1) % WINDOW_TICKS;
         if (recorded < WINDOW_TICKS) {
             recorded++;
         }
         totalTicks++;
 
-        long now = System.nanoTime();
         if (lastTickEndNanos != 0L) {
             long sinceLastTick = now - lastTickEndNanos;
             if (sinceLastTick > 0) {
@@ -92,18 +99,52 @@ public final class TickStatistics {
      * @return {@code null} when no tick has been recorded yet
      */
     public Mspt mspt() {
-        int size = recorded;
-        if (size == 0) {
-            return null;
+        return Mspt.of(durations, recorded);
+    }
+
+    /**
+     * MSPT over the most recent {@code ticks} ticks of the window.
+     *
+     * @return {@code null} when no tick has been recorded yet
+     */
+    public Mspt msptOfLast(int ticks) {
+        int count = Math.min(ticks, recorded);
+        long[] last = new long[count];
+        for (int i = 0; i < count; i++) {
+            last[i] = durations[Math.floorMod(cursor - 1 - i, WINDOW_TICKS)];
         }
-        long[] copy = Arrays.copyOf(durations, size);
-        Arrays.sort(copy);
-        long sum = 0;
-        for (long value : copy) {
-            sum += value;
+        return Mspt.of(last, count);
+    }
+
+    /**
+     * Ticks actually completed per second over the last {@code seconds}, counted rather than
+     * smoothed, so a short window shows a stall the moment it happens. Above 20 means the server is
+     * catching up after a slow tick.
+     */
+    public double tpsOver(double seconds) {
+        return tpsOver(seconds, System.nanoTime());
+    }
+
+    double tpsOver(double seconds, long now) {
+        long window = (long) (seconds * NANOS_PER_SECOND);
+        int inWindow = 0;
+        long oldest = now;
+        for (int i = 0; i < recorded; i++) {
+            long end = endTimes[Math.floorMod(cursor - 1 - i, WINDOW_TICKS)];
+            if (now - end >= window) {
+                // The ring reaches back past the window: count the ticks inside it.
+                return inWindow / seconds;
+            }
+            inWindow++;
+            oldest = end;
         }
-        return new Mspt(size, (double) sum / size, pick(copy, 50), pick(copy, 95), pick(copy, 99),
-                copy[copy.length - 1]);
+        // The ring does not cover the whole window (young server, or a window longer than the
+        // ring): rate over the span it does cover.
+        double covered = (now - oldest) / (double) NANOS_PER_SECOND;
+        if (inWindow < 2 || covered <= 0.0) {
+            return 20.0;
+        }
+        return (inWindow - 1) / covered;
     }
 
     private static long pick(long[] sorted, double percentile) {
@@ -120,19 +161,44 @@ public final class TickStatistics {
     /** MSPT summary over the rolling window, in milliseconds. */
     public static final class Mspt {
         private final int samples;
+        private final long minNanos;
         private final double meanNanos;
         private final long p50Nanos;
         private final long p95Nanos;
         private final long p99Nanos;
         private final long maxNanos;
 
-        Mspt(int samples, double meanNanos, long p50Nanos, long p95Nanos, long p99Nanos, long maxNanos) {
+        Mspt(int samples, long minNanos, double meanNanos, long p50Nanos, long p95Nanos, long p99Nanos, long maxNanos) {
             this.samples = samples;
+            this.minNanos = minNanos;
             this.meanNanos = meanNanos;
             this.p50Nanos = p50Nanos;
             this.p95Nanos = p95Nanos;
             this.p99Nanos = p99Nanos;
             this.maxNanos = maxNanos;
+        }
+
+        /**
+         * Exact summary of the first {@code count} tick durations, in nanoseconds.
+         *
+         * @return {@code null} when {@code count} is zero
+         */
+        public static Mspt of(long[] durationsNanos, int count) {
+            if (count == 0) {
+                return null;
+            }
+            long[] copy = Arrays.copyOf(durationsNanos, count);
+            Arrays.sort(copy);
+            long sum = 0;
+            for (long value : copy) {
+                sum += value;
+            }
+            return new Mspt(count, copy[0], (double) sum / count, pick(copy, 50), pick(copy, 95), pick(copy, 99),
+                    copy[copy.length - 1]);
+        }
+
+        public double min() {
+            return minNanos / 1.0e6;
         }
 
         public int samples() {
@@ -161,7 +227,7 @@ public final class TickStatistics {
 
         @Override
         public String toString() {
-            return String.format("mean=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms max=%.2fms",
+            return String.format(Locale.ROOT, "mean=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms max=%.2fms",
                     mean(), p50(), p95(), p99(), max());
         }
     }

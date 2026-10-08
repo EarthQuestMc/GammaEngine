@@ -1,6 +1,8 @@
 package io.github.crucible.bootstrap;
 
 import cpw.mods.fml.common.launcher.FMLTweaker;
+import io.github.gammaengine.startup.EarlyConfig;
+import io.github.gammaengine.startup.LibraryCheckCache;
 import net.minecraft.launchwrapper.LaunchClassLoader;
 
 import java.io.File;
@@ -26,13 +28,14 @@ public class CrucibleServerMainHook {
     private static final Path LIBRARY_ROOT = Paths.get("libraries").toAbsolutePath();
     public static final PrintStream originalOut = System.out;
     public static final PrintStream originalErr = System.err;
+    private static String libraryCheckSummary = "";
 
     public static void relaunchMain(String[] args) throws Exception {
         // GammaEngine - the banner is the first thing on the console, before any log framework is
         // configured, so an operator always knows which build they are looking at.
         io.github.gammaengine.util.ConsoleBanner.print(System.out,
                 "Minecraft 1.7.10  |  Forge 10.13.4.1614  |  Bukkit 1.7.10-R0.1-SNAPSHOT",
-                "Multi-core Forge + Bukkit server, powered by the AutoThread runtime");
+                "Forge + Bukkit server built for player count and fast startup");
         System.out.println("[GammaEngine] Running pre-launch tweaks");
 
         File injectFile = new File("inject.properties");
@@ -59,8 +62,8 @@ public class CrucibleServerMainHook {
 
         Lwjgl3ifyGlue.checkJava();
 
-        // GammaEngine - time the verification: it reads and hashes every library jar on every boot,
-        // so it is one of the few startup costs that is paid even when nothing changed.
+        // GammaEngine - time the verification: it runs on every boot, even when nothing changed. Only
+        // the jars that changed since the last successful check are read and hashed (see below).
         long verificationStart = System.nanoTime();
         boolean librariesReady = verifyLibraries();
         long verificationMillis = (System.nanoTime() - verificationStart) / 1_000_000L;
@@ -70,7 +73,8 @@ public class CrucibleServerMainHook {
             System.out.println("[GammaEngine] GammaEngine installed! A restart is required to be able to boot.");
             System.exit(0);
         } else {
-            System.out.println("[GammaEngine] Libraries verified in " + verificationMillis + " ms, booting the server");
+            System.out.println("[GammaEngine] Libraries verified in " + verificationMillis + " ms"
+                    + libraryCheckSummary + ", booting the server");
         }
     }
 
@@ -88,7 +92,29 @@ public class CrucibleServerMainHook {
         if (!Files.isDirectory(LIBRARY_ROOT)) {
             return false;
         }
-        return LibraryManager.checkIntegrity(LIBRARY_ROOT, CrucibleMetadata.NEEDED_LIBRARIES);
+        // GammaEngine - jars unchanged since the last successful check (same size, timestamp and
+        // expected MD5) are not hashed again. The switch is read without GammaConfig: SnakeYAML and
+        // log4j are in the very jars being checked (see EarlyConfig).
+        boolean useCache = EarlyConfig.libraryCheckCache(Paths.get("gammaengine.yml"), System.out);
+        LibraryCheckCache cache = useCache
+                ? LibraryCheckCache.load(LIBRARY_ROOT.resolve(LibraryCheckCache.FILE_NAME))
+                : LibraryCheckCache.disabled();
+        if (cache.loadProblem() != null) {
+            System.out.println("[GammaEngine] Library check cache unusable (" + cache.loadProblem()
+                    + "), hashing every library");
+        }
+        boolean verified = LibraryManager.checkIntegrity(LIBRARY_ROOT, CrucibleMetadata.NEEDED_LIBRARIES, cache);
+        if (verified) {
+            try {
+                cache.saveIfChanged();
+            } catch (IOException e) {
+                System.out.println("[GammaEngine] Could not save the library check cache (" + e
+                        + "), changed libraries will be hashed again next boot");
+            }
+            libraryCheckSummary = " (" + cache.hashed() + " hashed, "
+                    + (useCache ? cache.trusted() + " unchanged since the last check" : "check cache off") + ")";
+        }
+        return verified;
     }
 
     private static void setupLibraries() throws InterruptedException {

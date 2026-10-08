@@ -1,0 +1,11 @@
+[package]
+name = "gammaengine-protocol"
+description = "Minecraft 1.7.10 (protocol 5) and Forge FML|HS wire format, shared by the GammaEngine bench bots and the future proxy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "gammaengine_protocol"

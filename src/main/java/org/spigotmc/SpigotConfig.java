@@ -75,7 +75,8 @@ public class SpigotConfig {
             net.minecraft.server.MinecraftServer.getServer().server.getCommandMap().register(entry.getKey(), "Spigot", entry.getValue());
         }
 
-        if (metrics == null) {
+        // GammaEngine - inherited telemetry stays off unless gamma.legacy.metrics is set
+        if (metrics == null && io.github.gammaengine.config.GammaConfig.configs.gamma_legacy_metrics) {
             try {
                 metrics = new Metrics();
                 metrics.start();
