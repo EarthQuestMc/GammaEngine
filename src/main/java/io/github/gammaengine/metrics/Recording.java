@@ -35,7 +35,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * One recording session: every tick and every garbage collection between start and stop, written
- * to {@code gammaengine/bench/<name>-<date>/}.
+ * to {@code gammaengine/bench/<name>-<date>/}. With attribution, the session also owns the
+ * {@link AttributionTable} that {@link TickAttribution} fills, and writes {@code mods.csv} and
+ * {@code chunks.csv} when it ends.
  *
  * <p>Thread invariants:
  * <ul>
@@ -44,6 +46,9 @@ import java.util.concurrent.atomic.AtomicLong;
  *   <li>GC notifications arrive on a JMX thread and only touch the queue and the atomic counters.</li>
  *   <li>All file writing happens on the writer thread, so the tick never waits on the disk.</li>
  *   <li>{@link #finish} runs after the recorder stopped handing ticks to this session.</li>
+ *   <li>{@link #attribution} is written by the server thread through {@link TickAttribution} and
+ *       read by {@link #finish} only after the recorder detached it and, from another thread,
+ *       waited for the server thread to start a new tick.</li>
  * </ul>
  */
 final class Recording {
@@ -55,6 +60,8 @@ final class Recording {
 
     final String name;
     final File directory;
+    /** Level 2 sums, or {@code null} when this session does not attribute. */
+    final AttributionTable attribution;
     private final long startMillis = System.currentTimeMillis();
     private final long startNanos = System.nanoTime();
 
@@ -77,8 +84,9 @@ final class Recording {
     private volatile boolean stopping;
     private volatile boolean writeFailed;
 
-    Recording(String name) throws IOException {
+    Recording(String name, boolean attribution) throws IOException {
         this.name = name;
+        this.attribution = attribution ? new AttributionTable() : null;
         SimpleDateFormat stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT);
         this.directory = new File(new File("gammaengine", "bench"), name + "-" + stamp.format(new Date(startMillis)));
         if (!directory.isDirectory() && !directory.mkdirs()) {
@@ -100,11 +108,15 @@ final class Recording {
     }
 
     private Writer open(String file, String header) throws IOException {
-        Writer out = new BufferedWriter(new OutputStreamWriter(
-                new FileOutputStream(new File(directory, file)), StandardCharsets.UTF_8));
+        Writer out = open(file);
         out.write(header);
         out.write('\n');
         return out;
+    }
+
+    private Writer open(String file) throws IOException {
+        return new BufferedWriter(new OutputStreamWriter(
+                new FileOutputStream(new File(directory, file)), StandardCharsets.UTF_8));
     }
 
     /** Server thread, end of every tick. */
@@ -267,7 +279,15 @@ final class Recording {
         double seconds = (System.nanoTime() - startNanos) / 1.0e9;
         TickStatistics.Mspt mspt = TickStatistics.Mspt.of(durations, ticks);
         double playersMean = ticks == 0 ? 0.0 : (double) playerSum / ticks;
-        String json = summaryJson(seconds, mspt, playersMean);
+        long tickNanos = 0;
+        for (int i = 0; i < ticks; i++) {
+            tickNanos += durations[i];
+        }
+        AttributionReport report = writeAttribution();
+        String attributionJson = attribution == null ? "{\"enabled\": false}"
+                : report == null ? "{\"enabled\": true, \"error\": \"export failed, see the server log\"}"
+                : report.json(tickNanos);
+        String json = summaryJson(seconds, mspt, playersMean, attributionJson);
         try {
             Writer out = new OutputStreamWriter(new FileOutputStream(new File(directory, "summary.json")),
                     StandardCharsets.UTF_8);
@@ -290,12 +310,43 @@ final class Recording {
         if (mspt != null && playersMean > 0) {
             text.append(String.format(Locale.ROOT, ", %.3f ms per player", mspt.mean() / playersMean));
         }
-        text.append(String.format(Locale.ROOT, ", GC %d collection(s) %d ms total %d ms max. Files: %s",
-                gcCount.get(), gcTotalMillis.get(), gcMaxMillis.get(), directory.getPath()));
+        text.append(String.format(Locale.ROOT, ", GC %d collection(s) %d ms total %d ms max",
+                gcCount.get(), gcTotalMillis.get(), gcMaxMillis.get()));
+        if (report != null) {
+            text.append(", ").append(report.text(tickNanos));
+        }
+        text.append(". Files: ").append(directory.getPath());
         return text.toString();
     }
 
-    private String summaryJson(double seconds, TickStatistics.Mspt mspt, double playersMean) {
+    /** Writes mods.csv and chunks.csv; {@code null} when the session does not attribute or the export failed. */
+    private AttributionReport writeAttribution() {
+        if (attribution == null) {
+            return null;
+        }
+        try {
+            AttributionReport report = AttributionReport.of(attribution, OwnerResolver.forServer(),
+                    AttributionReport.CHUNK_ROWS);
+            Writer mods = open("mods.csv");
+            try {
+                report.writeMods(mods);
+            } finally {
+                mods.close();
+            }
+            Writer chunks = open("chunks.csv");
+            try {
+                report.writeChunks(chunks);
+            } finally {
+                chunks.close();
+            }
+            return report;
+        } catch (IOException | RuntimeException e) {
+            GammaEngine.LOGGER.error("Bench recording {} cannot write its attribution", name, e);
+            return null;
+        }
+    }
+
+    private String summaryJson(double seconds, TickStatistics.Mspt mspt, double playersMean, String attributionJson) {
         SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT);
         iso.setTimeZone(TimeZone.getTimeZone("UTC"));
         StringBuilder json = new StringBuilder(1024);
@@ -324,6 +375,7 @@ final class Recording {
         field(json, "players", "{\"mean\": " + number(playersMean) + ", \"max\": " + playerMax + "}");
         field(json, "cost_per_player_ms", mspt != null && playersMean > 0 ? number(mspt.mean() / playersMean) : "null");
         field(json, "budget_per_player_ms", playersMean > 0 ? number(50.0 / playersMean) : "null");
+        field(json, "attribution", attributionJson);
         json.append("  \"gc\": {\"count\": ").append(gcCount.get())
                 .append(", \"total_ms\": ").append(gcTotalMillis.get())
                 .append(", \"max_ms\": ").append(gcMaxMillis.get()).append("}\n");

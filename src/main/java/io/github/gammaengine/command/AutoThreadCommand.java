@@ -4,6 +4,7 @@ import io.github.gammaengine.GammaEngine;
 import io.github.gammaengine.autothread.AutoThreadRuntime;
 import io.github.gammaengine.bench.BenchmarkSpec;
 import io.github.gammaengine.bench.WorldBenchmark;
+import io.github.gammaengine.config.GammaConfig;
 import io.github.gammaengine.metrics.BenchRecorder;
 import io.github.gammaengine.profiler.GammaProfiler;
 import io.github.gammaengine.profiler.LatencyHistogram;
@@ -32,7 +33,7 @@ public class AutoThreadCommand extends Command {
                         + "&b  >&e /autothread native &7-&a native engine state.\n"
                         + "&b  >&e /autothread profile start|stop|report &7-&a profiling session.\n"
                         + "&b  >&e /autothread bench start|stop &7-&a synthetic load benchmark.\n"
-                        + "&b  >&e /autothread record start [name]|stop|status &7-&a record every tick to gammaengine/bench.\n"
+                        + "&b  >&e /autothread record start [name] [attribution]|stop|status &7-&a record every tick to gammaengine/bench.\n"
                         + "&b  >&e /autothread memory [gc] &7-&a heap, off-heap and world memory."));
         setPermission("gammaengine.autothread");
     }
@@ -133,14 +134,28 @@ public class AutoThreadCommand extends Command {
         }
     }
 
-    /** Tick and GC recording for the bench: the orchestrator drives it from the server console. */
+    /**
+     * Tick and GC recording for the bench: the orchestrator drives it from the server console.
+     * {@code attribution} anywhere after {@code start} turns on level 2 for this recording; the first
+     * other argument is the name.
+     */
     private void record(CommandSender sender, String[] args) {
         BenchRecorder recorder = BenchRecorder.get();
         String sub = args.length > 1 ? args[1].toLowerCase() : "status";
         if ("start".equals(sub)) {
-            String error = recorder.start(args.length > 2 ? args[2] : "run");
+            String name = null;
+            boolean attribution = GammaConfig.configs.gamma_bench_attribution;
+            for (int i = 2; i < args.length; i++) {
+                if ("attribution".equalsIgnoreCase(args[i])) {
+                    attribution = true;
+                } else if (name == null) {
+                    name = args[i];
+                }
+            }
+            String error = recorder.start(name == null ? "run" : name, attribution);
             if (error == null) {
-                sender.sendMessage(ChatColor.GREEN + "Recording every tick to " + recorder.directory());
+                sender.sendMessage(ChatColor.GREEN + "Recording every tick to " + recorder.directory()
+                        + (attribution ? ", with time per class, mod and chunk" : ""));
             } else {
                 sender.sendMessage(ChatColor.RED + error);
             }
@@ -152,9 +167,10 @@ public class AutoThreadCommand extends Command {
         } else if ("status".equals(sub)) {
             sender.sendMessage(recorder.isRecording()
                     ? ChatColor.GREEN + "Recording to " + recorder.directory()
+                    + (recorder.isAttributing() ? ", with attribution" : "")
                     : ChatColor.GRAY + "No recording is running.");
         } else {
-            sender.sendMessage(ChatColor.GRAY + "Usage: /autothread record start [name]|stop|status");
+            sender.sendMessage(ChatColor.GRAY + "Usage: /autothread record start [name] [attribution]|stop|status");
         }
     }
 

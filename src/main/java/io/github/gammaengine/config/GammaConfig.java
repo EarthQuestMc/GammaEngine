@@ -35,6 +35,13 @@ public class GammaConfig extends YamlConfig {
             "/autothread record start|stop does the same on demand. Costs nothing while off."})
     public boolean gamma_bench_export = false;
 
+    @Comments({"Level 2 of the bench: every recording also times each entity and tile entity tick, charges it",
+            "to its class, its mod or plugin and its chunk, and writes mods.csv and chunks.csv next to ticks.csv.",
+            "/autothread record start <name> attribution does the same for one recording.",
+            "Costs two nanoTime calls per ticked object while a recording runs, which inflates the MSPT:",
+            "compare runs made with the same setting. Costs one field read per object while off."})
+    public boolean gamma_bench_attribution = false;
+
     @Comments({"Allow the native (Rust) engine to be loaded when the library is present.",
             "When it is missing or fails to load, the server automatically falls back to the Java",
             "implementations, so turning this off only costs performance, never compatibility."})
