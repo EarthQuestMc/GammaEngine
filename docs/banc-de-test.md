@@ -125,6 +125,7 @@ inconnue est une erreur.
 | `port` | 25570 | Port du serveur, sur `127.0.0.1` |
 | `world` | vide | Monde de départ : un dossier contenant `level.dat`, copié en `world/` avant chaque démarrage ; vide : monde généré à partir de la graine des réglages de test |
 | `world_sha256` | vide | Empreinte attendue du monde (affichée et écrite dans `run.json` à chaque exécution) ; une autre empreinte arrête l'exécution |
+| `pack` | vide | Dossier de serveur d'un modpack : ses `mods/`, `plugins/` et `config/` (ceux qui existent, au moins un) sont copiés avant chaque démarrage, et l'empreinte de chacun est écrite dans `run.json` ; vide : ni mod ni plugin |
 | `startup_timeout` | 300 | Secondes d'attente de la ligne `Done` |
 | `stop_timeout` | 120 | Secondes laissées au serveur pour s'arrêter avant d'être tué |
 | **`[server.properties]`** | | Clés de `server.properties` écrites par-dessus les réglages de test, par exemple `view-distance = 6`. `server-ip`, `online-mode` et `server-port` sont refusées : l'orchestrateur les fixe |
@@ -212,9 +213,8 @@ exécution ne suffit pas à conclure : jouer trois répétitions au moins.
 * La préparation prend le jar le plus récent de `build/distributions/` au moment du lancement :
   un build lancé en parallèle peut changer le jar d'une exécution à l'autre. Le nom et le SHA-256
   du jar sont dans `run.json`, et `[server] jar` fige le jar.
-* Le monde de départ n'est que l'Overworld (`world/`) ; le Nether et l'End sont regénérés. Les
-  mods et plugins d'un modpack ne sont pas encore copiés par le scénario : il faudra une clé pour
-  le scénario EarthQuest.
+* Le monde de départ n'est que le dossier `world/` ; un monde Bukkit à part (`world_nether/`,
+  mondes d'un plugin multimonde) n'est pas copié.
 * Le niveau 3 (JFR) et les scénarios `base-industrielle`, `mobs`, `tile-entities`,
   `edition-en-masse` et `connexions` ne sont pas encore écrits.
 * Sous Linux, rien ne tue le serveur si l'orchestrateur est tué brutalement (`kill -9`) : le

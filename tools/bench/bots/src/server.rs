@@ -521,6 +521,7 @@ mod tests {
             port: 25570,
             world: None,
             world_sha256: None,
+            pack: None,
             startup_timeout: Duration::from_secs(300),
             stop_timeout: Duration::from_secs(120),
         }

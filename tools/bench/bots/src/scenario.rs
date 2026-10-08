@@ -57,6 +57,9 @@ pub struct ServerSpec {
     pub world: Option<PathBuf>,
     /// Expected fingerprint of `world` (see `sha256::dir_hex`); the run refuses another world.
     pub world_sha256: Option<String>,
+    /// A modpack's server folder: its `mods/`, `plugins/` and `config/` (those that exist) are
+    /// copied before each start, so a scenario runs with the real mods and plugins.
+    pub pack: Option<PathBuf>,
     pub startup_timeout: Duration,
     pub stop_timeout: Duration,
 }
@@ -159,6 +162,7 @@ impl Scenario {
             world: r.path(s, "world")?,
             world_sha256: Some(r.string(s, "world_sha256", "")?.to_ascii_lowercase())
                 .filter(|h| !h.is_empty()),
+            pack: r.path(s, "pack")?,
             startup_timeout: r.seconds(s, "startup_timeout", 300.0)?,
             stop_timeout: r.seconds(s, "stop_timeout", 120.0)?,
         };

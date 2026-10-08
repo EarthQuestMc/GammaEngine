@@ -206,6 +206,39 @@ fn shell_quote(arg: &str) -> String {
     }
 }
 
+/// The folders of a modpack that go into the server, in this order.
+const PACK_FOLDERS: &[&str] = &["mods", "plugins", "config"];
+
+/// One folder of a modpack: `mods`, `plugins` or `config`.
+#[derive(Debug, Clone)]
+struct PackPart {
+    name: &'static str,
+    path: PathBuf,
+    sha256: String,
+}
+
+/// The `mods/`, `plugins/` and `config/` of a modpack's server folder, fingerprinted so a result
+/// says which mods and plugins it was measured with. At least one of them must exist.
+fn pack_parts(pack: &Path) -> Result<Vec<PackPart>, String> {
+    let mut parts = Vec::new();
+    for name in PACK_FOLDERS {
+        let path = pack.join(name);
+        if path.is_dir() {
+            println!("fingerprinting {} ...", path.display());
+            let sha256 = sha256::dir_hex(&path)
+                .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+            parts.push(PackPart { name, path, sha256 });
+        }
+    }
+    if parts.is_empty() {
+        return Err(format!(
+            "[server] pack {}: no mods/, plugins/ or config/ folder in it",
+            pack.display()
+        ));
+    }
+    Ok(parts)
+}
+
 /// Everything a repetition needs, fixed for the whole run.
 struct Plan {
     scenario: Scenario,
@@ -217,6 +250,8 @@ struct Plan {
     jar: Option<PathBuf>,
     world: Option<PathBuf>,
     world_sha256: Option<String>,
+    /// The modpack folders copied into the server, with their fingerprints.
+    pack: Vec<PackPart>,
     java: String,
     java_version: String,
     jvm_args: Vec<String>,
@@ -297,6 +332,10 @@ fn run(options: &Options) -> Result<bool, String> {
         println!("world sha256 {hash}");
         world_sha256 = Some(hash);
     }
+    let pack = match scenario.server.pack.as_deref() {
+        Some(p) => pack_parts(&in_repo(&repo, p))?,
+        None => Vec::new(),
+    };
 
     let commit = git(&repo, &["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "nogit".into());
     let dirty = git(&repo, &["status", "--porcelain", "--untracked-files=no"])
@@ -312,6 +351,7 @@ fn run(options: &Options) -> Result<bool, String> {
         jar,
         world,
         world_sha256,
+        pack,
         java,
         java_version,
         jvm_args,
@@ -408,6 +448,9 @@ fn print_plan(plan: &Plan) {
         "java: {}",
         plan.java_version.lines().next().unwrap_or("?").trim()
     );
+    for part in &plan.pack {
+        println!("modpack {}: {}", part.name, part.path.display());
+    }
     println!("command: {}", command_line(plan));
 }
 
@@ -539,6 +582,10 @@ fn reset_server(plan: &Plan) -> Result<(), String> {
     }
     if let Some(world) = &plan.world {
         util::copy_dir(world, &dir.join("world")).map_err(|e| io("cannot copy the world", e))?;
+    }
+    for part in &plan.pack {
+        util::copy_dir(&part.path, &dir.join(part.name))
+            .map_err(|e| io(&format!("cannot copy the modpack's {}", part.name), e))?;
     }
     Ok(())
 }
@@ -863,6 +910,25 @@ fn json_opt<T: ToString>(value: Option<T>) -> String {
     value.map_or("null".into(), |v| v.to_string())
 }
 
+/// `null` without a modpack, otherwise each folder with its path and fingerprint.
+fn pack_json(parts: &[PackPart]) -> String {
+    if parts.is_empty() {
+        return "null".into();
+    }
+    let fields: Vec<String> = parts
+        .iter()
+        .map(|p| {
+            format!(
+                "{}: {{\"path\": {}, \"sha256\": {}}}",
+                json_string(p.name),
+                json_string(&p.path.display().to_string()),
+                json_string(&p.sha256)
+            )
+        })
+        .collect();
+    format!("{{{}}}", fields.join(", "))
+}
+
 fn write_run_json(
     plan: &Plan,
     results: &Path,
@@ -916,6 +982,7 @@ fn write_run_json(
             _ => "null".into(),
         },
     );
+    field("pack", pack_json(&plan.pack));
     let properties: Vec<String> = s
         .properties
         .iter()
@@ -1055,6 +1122,25 @@ mod tests {
     }
 
     #[test]
+    fn modpack_folders() {
+        let root = std::env::temp_dir().join(format!("gamma-bots-pack-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let error = pack_parts(&root).unwrap_err();
+        assert!(error.contains("no mods/, plugins/ or config/"), "{error}");
+
+        fs::create_dir_all(root.join("plugins")).unwrap();
+        fs::create_dir_all(root.join("mods")).unwrap();
+        fs::write(root.join("mods").join("a.jar"), b"a").unwrap();
+        fs::create_dir_all(root.join("world")).unwrap();
+        let parts = pack_parts(&root).unwrap();
+        let names: Vec<&str> = parts.iter().map(|p| p.name).collect();
+        assert_eq!(names, ["mods", "plugins"]);
+        assert_ne!(parts[0].sha256, parts[1].sha256);
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
     fn run_json_is_valid() {
         let scenario = Scenario::parse("name = \"t\"\n", "t", &[]).unwrap();
         let plan = Plan {
@@ -1067,6 +1153,11 @@ mod tests {
             jar: None,
             world: Some(PathBuf::from("w")),
             world_sha256: Some("ab".into()),
+            pack: vec![PackPart {
+                name: "mods",
+                path: PathBuf::from("pack\\mods"),
+                sha256: "cd".into(),
+            }],
             java: "java".into(),
             java_version: "java version \"1.8.0_491\"\n".into(),
             jvm_args: vec!["-Xmx1G".into(), "nogui".into()],
@@ -1100,6 +1191,13 @@ mod tests {
                 .and_then(|b| b.get("count"))
                 .and_then(|c| c.as_f64()),
             Some(20.0)
+        );
+        assert_eq!(
+            json.get("pack")
+                .and_then(|p| p.get("mods"))
+                .and_then(|m| m.get("sha256"))
+                .and_then(|h| h.as_str()),
+            Some("cd")
         );
         let reps = json.get("repetitions").and_then(|r| r.as_array()).unwrap();
         assert_eq!(reps.len(), 2);
