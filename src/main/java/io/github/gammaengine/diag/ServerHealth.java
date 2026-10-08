@@ -1,5 +1,6 @@
 package io.github.gammaengine.diag;
 
+import io.github.gammaengine.metrics.GcBeans;
 import io.github.gammaengine.profiler.GammaProfiler;
 import io.github.gammaengine.profiler.TickStatistics;
 import net.minecraft.server.MinecraftServer;
@@ -7,7 +8,6 @@ import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.DimensionManager;
 import org.bukkit.ChatColor;
 
-import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.OperatingSystemMXBean;
 import java.util.ArrayList;
@@ -33,8 +33,7 @@ public final class ServerHealth {
 
     private final double[] processCpu = new double[SAMPLES];
     private final double[] systemCpu = new double[SAMPLES];
-    private final long[] gcCount = new long[SAMPLES];
-    private final long[] gcMillis = new long[SAMPLES];
+    private final GcBeans.Totals[] gc = new GcBeans.Totals[SAMPLES];
     private int cursor;
     private int samples;
     private Thread sampler;
@@ -85,17 +84,11 @@ public final class ServerHealth {
             process = hotspot.getProcessCpuLoad();
             system = hotspot.getSystemCpuLoad();
         }
-        long count = 0;
-        long millis = 0;
-        for (GarbageCollectorMXBean gc : ManagementFactory.getGarbageCollectorMXBeans()) {
-            count += Math.max(0L, gc.getCollectionCount());
-            millis += Math.max(0L, gc.getCollectionTime());
-        }
+        GcBeans.Totals totals = GcBeans.totals();
         synchronized (this) {
             processCpu[cursor] = process;
             systemCpu[cursor] = system;
-            gcCount[cursor] = count;
-            gcMillis[cursor] = millis;
+            gc[cursor] = totals;
             cursor = (cursor + 1) % SAMPLES;
             if (samples < SAMPLES) {
                 samples++;
@@ -118,15 +111,15 @@ public final class ServerHealth {
         return known == 0 ? -1.0 : sum / known;
     }
 
-    /** Collections and collection time over the last {@code seconds}, from cumulative counters. */
-    private synchronized long[] gcDelta(int seconds) {
+    /** Pauses and concurrent cycles over the last {@code seconds}, from cumulative counters. */
+    private synchronized GcBeans.Totals gcDelta(int seconds) {
         if (samples < 2) {
-            return new long[]{0L, 0L};
+            return new GcBeans.Totals(0L, 0L, 0L, 0L);
         }
         int back = Math.min(seconds, samples - 1);
         int newest = Math.floorMod(cursor - 1, SAMPLES);
         int oldest = Math.floorMod(cursor - 1 - back, SAMPLES);
-        return new long[]{gcCount[newest] - gcCount[oldest], gcMillis[newest] - gcMillis[oldest]};
+        return gc[newest].since(gc[oldest]);
     }
 
     /** The report lines, coloured for chat and console. Server thread. */
@@ -159,11 +152,13 @@ public final class ServerHealth {
 
         Runtime runtime = Runtime.getRuntime();
         long used = runtime.totalMemory() - runtime.freeMemory();
-        long[] gc = gcDelta(60);
+        GcBeans.Totals lastMinuteGc = gcDelta(60);
         lines.add(ChatColor.GOLD + "Memory: " + ChatColor.WHITE + mib(used) + ChatColor.GRAY + " used of "
                 + mib(runtime.totalMemory()) + " allocated, " + mib(runtime.maxMemory()) + " max"
-                + ChatColor.GOLD + "  GC last 1m: " + ChatColor.WHITE + gc[0] + ChatColor.GRAY + " collection(s), "
-                + gc[1] + " ms");
+                + ChatColor.GOLD + "  GC last 1m: " + ChatColor.WHITE + lastMinuteGc.pauses + ChatColor.GRAY
+                + " pause(s), " + lastMinuteGc.pauseMillis + " ms"
+                + (lastMinuteGc.cycles > 0 ? "; " + lastMinuteGc.cycles + " concurrent cycle(s), "
+                + lastMinuteGc.cycleMillis + " ms" : ""));
 
         addLoad(lines, lastMinute);
         lines.add(ChatColor.DARK_GRAY + "Java " + System.getProperty("java.version") + ", "

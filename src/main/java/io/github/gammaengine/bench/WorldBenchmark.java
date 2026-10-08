@@ -2,6 +2,7 @@ package io.github.gammaengine.bench;
 
 import io.github.gammaengine.GammaEngine;
 import io.github.gammaengine.autothread.AutoThreadRuntime;
+import io.github.gammaengine.metrics.GcBeans;
 import io.github.gammaengine.profiler.GammaProfiler;
 import io.github.gammaengine.profiler.LatencyHistogram;
 import net.minecraft.block.Block;
@@ -13,7 +14,6 @@ import net.minecraft.util.ChunkCoordinates;
 import net.minecraft.world.WorldServer;
 
 import java.io.File;
-import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
@@ -56,8 +56,7 @@ public final class WorldBenchmark {
     private int ticksLeft;
     private long startNanos;
     private long startCpuNanos;
-    private long startGcCount;
-    private long startGcMillis;
+    private GcBeans.Totals startGc;
     private long startHeapUsed;
     private Listener listener;
 
@@ -215,8 +214,7 @@ public final class WorldBenchmark {
         GammaProfiler.get().startSession();
         startNanos = System.nanoTime();
         startCpuNanos = processCpuNanos();
-        startGcCount = gcCount();
-        startGcMillis = gcMillis();
+        startGc = GcBeans.totals();
         startHeapUsed = heapUsed();
         say("Measuring for " + spec.ticks() + " ticks.");
     }
@@ -263,8 +261,7 @@ public final class WorldBenchmark {
             out.append(String.format("CPU: %.1f ms total, %.2f core(s) average, %.3f core-ms per tick%n",
                     cpuNanos / 1.0e6, cores, cpuNanos / 1.0e6 / ticks));
         }
-        out.append(String.format("GC: %d collection(s), %d ms%n",
-                gcCount() - startGcCount, gcMillis() - startGcMillis));
+        out.append("GC: ").append(GcBeans.totals().since(startGc).describe()).append('\n');
         out.append(String.format("Heap used: %.1f MiB at start, %.1f MiB at end%n",
                 startHeapUsed / 1048576.0, heapUsed() / 1048576.0));
         out.append(String.format("World: %d chunks loaded, %d entities, %d tile entities%n",
@@ -312,28 +309,6 @@ public final class WorldBenchmark {
             // Not a HotSpot-compatible JVM: CPU time is simply not reported.
         }
         return 0L;
-    }
-
-    private static long gcCount() {
-        long total = 0;
-        for (GarbageCollectorMXBean bean : ManagementFactory.getGarbageCollectorMXBeans()) {
-            long count = bean.getCollectionCount();
-            if (count > 0) {
-                total += count;
-            }
-        }
-        return total;
-    }
-
-    private static long gcMillis() {
-        long total = 0;
-        for (GarbageCollectorMXBean bean : ManagementFactory.getGarbageCollectorMXBeans()) {
-            long millis = bean.getCollectionTime();
-            if (millis > 0) {
-                total += millis;
-            }
-        }
-        return total;
     }
 
     private static long heapUsed() {
