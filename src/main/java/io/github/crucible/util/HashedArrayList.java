@@ -2,6 +2,17 @@ package io.github.crucible.util;
 
 import java.util.*;
 
+/**
+ * An {@link ArrayList} that refuses duplicates and answers {@link #contains} from a hash set.
+ *
+ * <p>This is the concrete type of {@code World.loadedEntityList}, {@code unloadedEntityList},
+ * {@code loadedTileEntityList} and {@code addedTileEntityList}, so mods see it through the
+ * {@code List} interface: every mutating method, including the ones reached through iterators,
+ * must keep the list and the set holding exactly the same elements.
+ *
+ * <p>Thread invariant: written and iterated by the thread that owns the world only. The set is
+ * synchronized for historical reasons; the list itself is not thread-safe.
+ */
 public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
 
     private final Set<TileEntity> hashed = Collections.synchronizedSet(new LinkedHashSet<TileEntity>());
@@ -28,24 +39,29 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
             super.add(arg0, arg1);
     }
 
+    // GammaEngine - add element by element: the set used to accept only the new elements while
+    // the list appended all of them, duplicates included.
     @Override
     public boolean addAll(Collection arg0) {
-        boolean flag = hashed.addAll(arg0);
-
-        if (flag)
-            super.addAll(arg0);
-
-        return flag;
+        boolean changed = false;
+        for (Object element : arg0) {
+            changed |= add((TileEntity) element);
+        }
+        return changed;
     }
 
     @Override
     public boolean addAll(int arg0, Collection arg1) {
-        boolean flag = hashed.addAll(arg1);
+        List<TileEntity> fresh = new ArrayList<TileEntity>(arg1.size());
+        for (Object element : arg1) {
+            if (hashed.add((TileEntity) element))
+                fresh.add((TileEntity) element);
+        }
 
-        if (flag)
-            super.addAll(arg0, arg1);
+        if (!fresh.isEmpty())
+            super.addAll(arg0, fresh);
 
-        return flag;
+        return !fresh.isEmpty();
     }
 
     @Override
@@ -93,14 +109,16 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
         }
     }
 
+    // GammaEngine - listIterator() used to call itself and overflow the stack, and
+    // listIterator(int) returned an iterator whose mutations bypassed the set.
     @Override
     public ListIterator listIterator() {
-        return this.listIterator();
+        return listIterator(0);
     }
 
     @Override
     public ListIterator listIterator(int arg0) {
-        return super.listIterator(arg0);
+        return new HashedArrayListIterator(super.listIterator(arg0));
     }
 
     @Override
@@ -121,14 +139,13 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
         return te;
     }
 
+    // GammaEngine - remove in place: rebuilding the list from the set reordered it.
     @Override
     public boolean removeAll(Collection arg0) {
         boolean flag = this.hashed.removeAll(arg0);
 
-        if (flag) {
-            super.clear();
-            super.addAll(this.hashed);
-        }
+        if (flag)
+            super.removeAll(arg0);
 
         return flag;
     }
@@ -143,14 +160,30 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
         return flag;
     }
 
+    // GammaEngine - the set used to lose the new element instead of the replaced one. A replaced
+    // element only leaves the set once no slot holds it any more, which keeps swaps (two sets in a
+    // row, as Collections.swap and shuffle do) consistent.
     @Override
     public TileEntity set(int arg0, TileEntity arg1) {
         TileEntity te = super.set(arg0, arg1);
-
-        if (te != null)
-            this.hashed.remove(arg1);
-
+        replaced(te, arg1);
         return te;
+    }
+
+    @Override
+    public boolean removeIf(java.util.function.Predicate<? super TileEntity> filter) {
+        boolean flag = super.removeIf(filter);
+
+        if (flag)
+            resynchronize();
+
+        return flag;
+    }
+
+    @Override
+    public void replaceAll(java.util.function.UnaryOperator<TileEntity> operator) {
+        super.replaceAll(operator);
+        resynchronize();
     }
 
     @Override
@@ -171,6 +204,22 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
     @Override
     public Object[] toArray(Object[] arg0) {
         return super.toArray(arg0);
+    }
+
+    private void replaced(TileEntity previous, TileEntity current) {
+        if (previous == current)
+            return;
+
+        hashed.add(current);
+
+        if (super.indexOf(previous) < 0)
+            hashed.remove(previous);
+    }
+
+    /** Rebuilds the set from the list after a bulk operation that ArrayList performs in place. */
+    private void resynchronize() {
+        hashed.clear();
+        hashed.addAll(this);
     }
 
     class HashedArrayIterator<TileEntity> implements Iterator<TileEntity> {
@@ -201,19 +250,20 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
         }
     }
 
-    class HashedArrayListIterator<TileEntity> implements ListIterator<TileEntity> {
+    // GammaEngine - the set was never assigned, so add, remove and set threw a NullPointerException.
+    // ArrayList's own list iterator already routes add, set and remove through the overridden
+    // methods of this list, which keep the set in step; this wrapper only has to refuse duplicates
+    // before ArrayList moves its cursor.
+    class HashedArrayListIterator implements ListIterator<TileEntity> {
         ListIterator<TileEntity> aritr;
-        HashSet<TileEntity> teset;
-        private TileEntity lastRet = null;
 
-        public HashedArrayListIterator(ListIterator<TileEntity> aritr, HashSet<TileEntity> teset) {
+        public HashedArrayListIterator(ListIterator<TileEntity> aritr) {
             this.aritr = aritr;
         }
 
         @Override
         public void add(TileEntity arg0) {
-            boolean flag = teset.add(arg0);
-            if (flag)
+            if (!hashed.contains(arg0))
                 this.aritr.add(arg0);
         }
 
@@ -229,8 +279,7 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
 
         @Override
         public TileEntity next() {
-            lastRet = aritr.next();
-            return lastRet;
+            return aritr.next();
         }
 
         @Override
@@ -240,8 +289,7 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
 
         @Override
         public TileEntity previous() {
-            lastRet = aritr.previous();
-            return lastRet;
+            return aritr.previous();
         }
 
         @Override
@@ -252,16 +300,11 @@ public class HashedArrayList<TileEntity> extends ArrayList<TileEntity> {
         @Override
         public void remove() {
             aritr.remove();
-            teset.remove(lastRet);
-
         }
 
         @Override
         public void set(TileEntity arg0) {
             aritr.set(arg0);
-            teset.remove(lastRet);
-            teset.add(arg0);
-
         }
     }
 }
