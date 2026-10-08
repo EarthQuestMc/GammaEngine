@@ -70,9 +70,12 @@ Get-ChildItem -Path $templates -File | ForEach-Object {
     }
 }
 
+$eula = Join-Path $Target 'eula.txt'
 if ($AcceptEula) {
-    Set-Content -Path (Join-Path $Target 'eula.txt') -Value 'eula=true' -Encoding ASCII
-} elseif (-not (Select-String -Path (Join-Path $Target 'eula.txt') -Pattern 'eula=true' -Quiet -ErrorAction SilentlyContinue)) {
+    Set-Content -Path $eula -Value 'eula=true' -Encoding ASCII
+} elseif (-not ((Test-Path $eula) -and (Select-String -Path $eula -Pattern 'eula=true' -Quiet))) {
+    # Test-Path first: under ErrorActionPreference Stop, Select-String on a missing file throws
+    # even with -ErrorAction SilentlyContinue.
     Write-Host "[GammaEngine] The Minecraft EULA is not accepted yet: run again with -AcceptEula if you accept it."
 }
 
