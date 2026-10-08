@@ -33,6 +33,10 @@ jobs:
     - name: Build Crucible distribution packages
       run: ./gradlew buildPackages
 
+    # A failing test must stop the pre-release.
+    - name: Run unit tests
+      run: ./gradlew :eclipse:cauldron:test
+
     - name: Get commit count
       id: commit_count
       run: |

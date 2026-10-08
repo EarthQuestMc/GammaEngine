@@ -98,16 +98,16 @@ Exemple réel, `patches/net/minecraft/server/MinecraftServer.java.patch` :
 
 ## Tests
 
-Cinq classes JUnit 4 dans `src/test/java/io/github/gammaengine/` : `LatencyHistogramTest`,
-`TickStatisticsTest`, `ScratchBuffersTest`, `CpuTopologyTest`, `NativeEngineTest` (banc
-Java contre Rust, saute la partie native si la bibliothèque est absente). Lancées par
-`:eclipse:cauldron:test`. Rien ne teste le serveur démarré, et la CI ne lance pas les tests.
+Classes JUnit 4 dans `src/test/java/` : profileur et fenêtres de tick, export du banc, tampons,
+topologie CPU, `HashedArrayList`, et `NativeEngineTest` (banc Java contre Rust, saute la partie
+native si la bibliothèque est absente). Lancées par `:eclipse:cauldron:test`, en local comme en
+CI. Rien ne teste encore le serveur démarré : c'est le rôle du banc de la phase 0.
 
 ## Bibliothèque native
 
 `native/` est une crate Rust (`cdylib`) : compression et décompression zlib, XXH64, arithmétique des
-secteurs de fichiers region. Elle se compile à part (`cargo build --release`), hors de Gradle et de
-la CI. Le serveur la cherche dans cet ordre (`NativeEngine.java:52-93`) : propriété
+secteurs de fichiers region. Elle se compile à part (`cargo build --release`), hors de Gradle ; la
+CI la teste et la compile sous Linux et Windows. Le serveur la cherche dans cet ordre (`NativeEngine.java:52-93`) : propriété
 `gammaengine.nativeLibrary`, `java.library.path`, puis `gammaengine/native/` à côté du jar. Le
 serveur la charge au démarrage mais ne l'appelle pas encore : seuls les tests s'en servent.
 
@@ -115,11 +115,13 @@ serveur la charge au démarrage mais ne l'appelle pas encore : seuls les tests s
 
 | Workflow | Déclencheur | Ce qu'il fait |
 | --- | --- | --- |
-| `.github/workflows/prerelease-build.yml` | push sur `main` | JDK 8, `setupCrucible`, `buildPackages`, renomme le jar `GammaEngine-1.7.10-main-<sha>-dev-<n>-server.jar`, publie une pré-version taguée `main-<sha>` |
-| `.github/workflows/verify-build.yml` | pull request vers `main`, ou à la main | JDK 8, `setupCrucible`, `buildPackages` |
+| `.github/workflows/prerelease-build.yml` | push sur `main` | JDK 8, `setupCrucible`, `buildPackages`, tests unitaires (un test rouge bloque la publication), renomme le jar `GammaEngine-1.7.10-main-<sha>-dev-<n>-server.jar`, publie une pré-version taguée `main-<sha>` |
+| `.github/workflows/verify-build.yml` | push sur `dev` et `main`, pull request vers `main`, ou à la main | JDK 8, `setupCrucible`, `buildPackages`, jar en artefact, tests unitaires, rapports de test en artefact |
+| `.github/workflows/rust.yml` | push ou pull request qui touche `native/` ou `tools/bench/` | `native/` sous Linux et Windows : clippy (Linux), tests, build release ; `tools/bench/` : tests et build release |
 
-Le premier build sur `main` a réussi et publié le tag `main-1d2a51b`. Manquent : tests unitaires,
-build Rust, démarrage du serveur, banc de fumée.
+Le premier build sur `main` a réussi et publié le tag `main-1d2a51b`. Manquent : démarrage du
+serveur et banc de fumée en CI. `cargo fmt --check` échoue aujourd'hui sur `native/` : il n'est pas
+encore dans la CI.
 
 `build.gradle:72` calcule la version : toute branche autre que `master` donne
 `1.7.10-<branche>-<hash>`. Il n'y a plus de branche `master`, donc chaque build porte sa branche et
@@ -139,6 +141,7 @@ son hash, ce qui convient tant qu'aucune version n'est publiée.
   sortie de Gradle qui compte.
 * `.gitignore` ignore `*.sh` et `*.bat` : le script de lancement de la phase 1 et les scripts du banc
   de la phase 0 demandent une exception explicite.
-* La CI ne lance ni les tests ni la crate Rust : une régression du moteur passe le build sans bruit.
+* La CI ne démarre pas encore le serveur : une régression qui compile et passe les tests unitaires
+  peut encore empêcher le démarrage.
 * Le build tourne sur JDK 8. Écrire du code moteur en Java 21 (phase 1) demande de séparer ce code ou
   de changer la cible de compilation, et rend le serveur inutilisable sur Java 8.

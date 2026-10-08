@@ -1,26 +1,42 @@
 name: Verify project build
 
 on:
+  push:
+    branches:
+      - dev
+      - main
   pull_request:
     branches:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# A newer run on the same ref supersedes the older one, except on main where
+# every commit keeps its own verification.
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
       - name: Set up JDK 8
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v5
         with:
           java-version: '8'
           distribution: 'temurin'
 
-      - name: Show debug info
+      - name: Show Gradle version
         run: ./gradlew --version
 
       - name: Setup Crucible
@@ -28,3 +44,27 @@ jobs:
 
       - name: Build Crucible distribution packages
         run: ./gradlew buildPackages
+
+      # Uploaded before the tests so the jar stays available when a test fails.
+      - name: Upload server jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-jar
+          path: build/distributions/*-server.jar
+          if-no-files-found: error
+          retention-days: 14
+
+      # The eclipse/cauldron project only exists once setupCrucible has run.
+      - name: Run unit tests
+        run: ./gradlew :eclipse:cauldron:test
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            eclipse/cauldron/build/test-results/test/
+            eclipse/cauldron/build/reports/tests/test/
+          if-no-files-found: warn
+          retention-days: 14
