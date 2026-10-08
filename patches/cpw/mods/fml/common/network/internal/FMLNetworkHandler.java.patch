@@ -16,7 +16,7 @@
  
  public class FMLNetworkHandler
  {
-@@ -75,6 +84,31 @@
+@@ -75,14 +84,44 @@
              Container remoteGuiContainer = NetworkRegistry.INSTANCE.getRemoteGuiContainer(mc, entityPlayerMP, modGuiId, world, x, y, z);
              if (remoteGuiContainer != null)
              {
@@ -48,7 +48,56 @@
                  entityPlayerMP.getNextWindowId();
                  entityPlayerMP.closeContainer();
                  int windowId = entityPlayerMP.currentWindowId;
-@@ -131,6 +165,7 @@
+                 FMLMessage.OpenGui openGui = new FMLMessage.OpenGui(windowId, mc.getModId(), modGuiId, x, y, z);
+                 EmbeddedChannel embeddedChannel = channelPair.get(Side.SERVER);
+-                embeddedChannel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(OutboundTarget.PLAYER);
+-                embeddedChannel.attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(entityPlayerMP);
+-                embeddedChannel.writeOutbound(openGui);
++                // GammaEngine start - the channel is shared with the network threads (see forwardHandshake)
++                synchronized (embeddedChannel)
++                {
++                    embeddedChannel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(OutboundTarget.PLAYER);
++                    embeddedChannel.attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(entityPlayerMP);
++                    embeddedChannel.writeOutbound(openGui);
++                }
++                // GammaEngine end
+                 entityPlayerMP.openContainer = remoteGuiContainer;
+                 entityPlayerMP.openContainer.windowId = windowId;
+                 entityPlayerMP.openContainer.addCraftingToCrafters(entityPlayerMP);
+@@ -103,9 +142,14 @@
+     public static void makeEntitySpawnAdjustment(Entity entity, EntityPlayerMP player, int serverX, int serverY, int serverZ)
+     {
+         EmbeddedChannel embeddedChannel = channelPair.get(Side.SERVER);
+-        embeddedChannel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(OutboundTarget.PLAYER);
+-        embeddedChannel.attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(player);
+-        embeddedChannel.writeOutbound(new FMLMessage.EntityAdjustMessage(entity, serverX, serverY, serverZ));
++        // GammaEngine start - the channel is shared with the network threads (see forwardHandshake)
++        synchronized (embeddedChannel)
++        {
++            embeddedChannel.attr(FMLOutboundHandler.FML_MESSAGETARGET).set(OutboundTarget.PLAYER);
++            embeddedChannel.attr(FMLOutboundHandler.FML_MESSAGETARGETARGS).set(player);
++            embeddedChannel.writeOutbound(new FMLMessage.EntityAdjustMessage(entity, serverX, serverY, serverZ));
++        }
++        // GammaEngine end
+     }
+ 
+     public static Packet getEntitySpawningPacket(Entity entity)
+@@ -120,7 +164,13 @@
+             return null;
+         }
+ 
+-        return channelPair.get(Side.SERVER).generatePacketFrom(new FMLMessage.EntitySpawnMessage(er, entity, er.getContainer()));
++        // GammaEngine start - the channel is shared with the network threads (see forwardHandshake)
++        FMLEmbeddedChannel channel = channelPair.get(Side.SERVER);
++        synchronized (channel)
++        {
++            return channel.generatePacketFrom(new FMLMessage.EntitySpawnMessage(er, entity, er.getContainer()));
++        }
++        // GammaEngine end
+     }
+ 
+     public static String checkModList(FMLHandshakeMessage.ModList modListPacket, Side side)
+@@ -131,6 +181,7 @@
      public static String checkModList(Map<String,String> listData, Side side)
      {
          List<ModContainer> rejects = Lists.newArrayList();
@@ -56,7 +105,7 @@
          for (Entry<ModContainer, NetworkModHolder> networkMod : NetworkRegistry.INSTANCE.registry().entrySet())
          {
              boolean result = networkMod.getValue().check(listData, side);
-@@ -138,9 +173,15 @@
+@@ -138,9 +189,15 @@
              {
                  rejects.add(networkMod.getKey());
              }
@@ -72,3 +121,44 @@
              return null;
          }
          else
+@@ -172,15 +229,34 @@
+ 
+     public static List<FMLProxyPacket> forwardHandshake(CompleteHandshake push, NetworkDispatcher target, Side side)
+     {
+-        channelPair.get(side).attr(NetworkDispatcher.FML_DISPATCHER).set(target);
+-        channelPair.get(side).writeOutbound(push);
+-
++        // GammaEngine start - one channel serves every connection, written here by the network threads and by the
++        // main thread in the methods above: encode under its lock, clear the dispatcher before letting go of it, and
++        // pair the packet with its connection (HandshakeCompletions) instead of leaving the dispatcher in the shared
++        // attribute until the main thread reads it. Two handshakes finishing within one tick overwrote that attribute
++        // and lost a join; main thread writes made while it was set stayed queued here and were replayed as inbound
++        // packets of the next joining player (the FML "memory leak" warning).
++        FMLEmbeddedChannel channel = channelPair.get(side);
+         ArrayList<FMLProxyPacket> list = new ArrayList<FMLProxyPacket>();
+-        for (Object o: channelPair.get(side).outboundMessages())
++        synchronized (channel)
+         {
+-            list.add((FMLProxyPacket)o);
++            channel.outboundMessages().clear();
++            channel.attr(NetworkDispatcher.FML_DISPATCHER).set(target);
++            try
++            {
++                channel.writeOutbound(push);
++            }
++            finally
++            {
++                channel.attr(NetworkDispatcher.FML_DISPATCHER).remove();
++            }
++            for (Object o: channel.outboundMessages())
++            {
++                io.github.gammaengine.network.HandshakeCompletions.register((FMLProxyPacket)o, target);
++                list.add((FMLProxyPacket)o);
++            }
++            channel.outboundMessages().clear();
+         }
+-        channelPair.get(side).outboundMessages().clear();
++        // GammaEngine end
+         return list;
+     }
+ 

@@ -84,11 +84,17 @@ Nombre de fichiers de `patches/` (411 au total) qui contiennent chaque marqueur 
 | `Crucible` | 48 | Crucible |
 | `Thermos` | 44 | Thermos |
 | `KCauldron` | 9 | KCauldron |
-| `// GammaEngine` | 5 | ce fork |
+| `// GammaEngine` | 9 | ce fork |
 
-Les cinq patches GammaEngine : `MinecraftServer` (points d'accroche du cycle de vie et du tick,
-préchargement du spawn), `S21PacketChunkData` et `S26PacketMapChunkBulk` (tampons de compression et
-niveau deflate), `org.bukkit.Bukkit` et `VersionCommand` (marque).
+Les neuf patches GammaEngine :
+
+* `MinecraftServer` : points d'accroche du cycle de vie et du tick, préchargement du spawn.
+* `DedicatedServer` : lignes vides et entrée console fermée ignorées.
+* `World` : sonde de niveau 2 du banc autour de `updateEntity`.
+* `S21PacketChunkData` et `S26PacketMapChunkBulk` : tampons de compression et niveau deflate.
+* `FMLNetworkHandler` et `HandshakeCompletionHandler` : fin de poignée de main FML rattachée à sa
+  connexion, au lieu d'un attribut du canal `FML` partagé par toutes.
+* `org.bukkit.Bukkit` et `VersionCommand` : marque.
 
 Exemple réel, `patches/net/minecraft/server/MinecraftServer.java.patch` :
 
