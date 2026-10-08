@@ -11,6 +11,8 @@ pub const USAGE: &str = "\
 gamma-bots: load bots for a Minecraft 1.7.10 Forge server (protocol 5, offline mode)
 
 Usage: gamma-bots [options]
+       gamma-bots run <scenario.toml> [run options]   (gamma-bots run --help)
+       gamma-bots compare <before> <after> [--output <file>]
 
 Options:
   --host <host>          Server address (default 127.0.0.1)
@@ -159,7 +161,7 @@ pub fn parse(raw: impl IntoIterator<Item = String>) -> Result<Command, String> {
     Ok(Command::Run(args))
 }
 
-fn validate(args: &Args) -> Result<(), String> {
+pub fn validate(args: &Args) -> Result<(), String> {
     if args.count == 0 {
         return Err("--count must be at least 1".into());
     }

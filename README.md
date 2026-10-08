@@ -78,6 +78,7 @@ Voir [docs/build.md](docs/build.md). En résumé :
 | [docs/carte/](docs/carte/README.md) | Carte du code : tick, chunks, réseau, chargement, patches |
 | [docs/existant.md](docs/existant.md) | Ce que Crucible fait déjà parmi la feuille de route |
 | [docs/phase-0.md](docs/phase-0.md) | Plan détaillé du banc de test |
+| [docs/banc-de-test.md](docs/banc-de-test.md) | Mode d'emploi du banc : scénarios, `gamma-bots run` et `compare` |
 | [docs/phase-1-essai-java21.md](docs/phase-1-essai-java21.md) | Premier essai sur Java 21 : ZGC, G1 et Java 8 comparés |
 | [docs/scaling.md](docs/scaling.md) | Où part la consommation à 400 joueurs, chiffres à l'appui |
 | [docs/threading-model.md](docs/threading-model.md) | Les règles de threading que tout code du fork respecte |

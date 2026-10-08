@@ -5,6 +5,11 @@ Forge, mode hors ligne) qui rejoignent le serveur, y restent et s'y déplacent, 
 serveur sous une charge de joueurs reproductible. La séquence des paquets et les réglages du
 serveur sont dans [`docs/phase-0-bots.md`](../../docs/phase-0-bots.md).
 
+Le même exécutable porte l'orchestrateur du banc : `gamma-bots run <scénario.toml>` joue un
+scénario de `bench/scenarios/` de bout en bout (serveur neuf, bots, chauffe, enregistrement,
+arrêt, résultats dans `bench/results/`) et `gamma-bots compare <avant> <après>` écrit le tableau
+avant et après. Mode d'emploi : [`docs/banc-de-test.md`](../../docs/banc-de-test.md).
+
 ## Les deux crates
 
 ### `gammaengine-protocol` (`protocol/`, bibliothèque)
@@ -26,14 +31,21 @@ la phase 12.
 
 | Fichier | Contenu |
 |---|---|
-| `main.rs` | statut du serveur, arrivée étalée des bots, progression, arrêt, rapport |
+| `main.rs` | aiguillage entre les bots seuls et les sous-commandes `run` et `compare` ; exécution des bots seuls |
+| `fleet.rs` | statut du serveur, arrivée étalée des bots, progression, arrêt et collecte des mesures, communs aux deux usages |
 | `bot.rs` | connexion, machine d'états, mesures ; deux threads bloquants par bot (lecture, cadence de 50 ms) |
 | `behaviour.rs` | déplacements des comportements `idle`, `wander`, `explore` |
 | `report.rs` | CSV et résumé |
 | `args.rs`, `signal.rs` | ligne de commande, Ctrl-C |
+| `orchestrate.rs` | `run` : préparation du serveur, répétitions, collecte, `run.json` |
+| `server.rs` | processus du serveur : console sur des tubes, attente d'une ligne, commandes, arrêt ou mise à mort ; arguments JVM |
+| `scenario.rs`, `toml.rs` | fichiers de scénario et lecteur du sous-ensemble de TOML qu'ils utilisent |
+| `compare.rs` | `compare` : lecture des résultats, médiane et étendue des répétitions, tableau Markdown |
+| `sha256.rs`, `util.rs` | empreintes du jar et du monde ; dates UTC, JSON, CSV, copies de dossiers |
 
 Aucune dépendance externe : la bibliothèque standard suffit. Le Ctrl-C passe par
-`SetConsoleCtrlHandler` (Windows) ou `signal` (Unix), déclarés directement.
+`SetConsoleCtrlHandler` (Windows) ou `signal` (Unix), déclarés directement ; de même, sous
+Windows, l'objet job qui tue le serveur si l'orchestrateur meurt (`CreateJobObjectW`).
 
 ## Compiler
 
@@ -172,7 +184,8 @@ keep-alive, octets et chunks par seconde, `S08` et reculs.
   écrirait un « moved wrongly » avant que le bot ne remonte. Jamais vu à y = 164.
 - Les positions persistent : un bot retrouve son fichier joueur (`world/playerdata`) et réapparaît
   là où il s'était arrêté, par exemple dans le ciel après une exploration. Pour des mesures
-  reproductibles, partir d'un monde neuf ou changer de préfixe.
+  reproductibles, partir d'un monde neuf ou changer de préfixe ; `gamma-bots run` repart
+  d'un monde neuf à chaque répétition.
 - Deux threads par bot : 1000 threads pour 500 bots, piles de 256 Kio.
 - Ni chat ni commandes (comportement « Commandes » à venir) ; la dispersion se fait depuis la
   console (`spreadplayers`, `tp`), le bot confirme les téléportations.

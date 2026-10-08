@@ -200,6 +200,10 @@ Une seconde commande compare deux exécutions et produit le tableau avant et apr
 pour le compte rendu de chaque tâche. Si les bots sont écrits en Rust, l'orchestrateur est une
 sous-commande du même binaire, ce qui évite les scripts `.sh` et `.bat`, ignorés par git aujourd'hui.
 
+Fait : `gamma-bots run <scénario.toml>` et `gamma-bots compare <avant> <après>`, avec les
+scénarios `spawn-groupe`, `disperses` et `exploration` ; mode d'emploi, format des scénarios et
+limites dans [`banc-de-test.md`](banc-de-test.md).
+
 ### 5. Les mondes de départ et la référence
 
 * Monde vanilla : graine fixe, zone prégénérée, sans mods.

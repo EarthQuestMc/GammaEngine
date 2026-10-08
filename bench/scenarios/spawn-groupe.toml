@@ -1,0 +1,43 @@
+# Bots grouped at the world spawn, idle: fixed cost per player, entity tracking, chunk sending.
+# Phase 5 depends on it. Reference counts: 0, 50, 100, 200 and 400 bots
+# (gamma-bots run bench/scenarios/spawn-groupe.toml --set bots.count=100).
+# Format and every key with its default: docs/banc-de-test.md.
+
+name = "spawn-groupe"
+description = "Bots immobiles groupés au point d'apparition"
+repetitions = 1
+
+[server]
+dir = "test-server-orch"
+# Empty: the newest jar of build/distributions, copied by tools/test-server/setup.
+jar = ""
+java = "java"
+heap = "1G"
+# "" (the JVM's choice), "g1" or "zgc".
+gc = ""
+gc_log = false
+jvm_args = []
+port = 25570
+# Empty: a world generated from the seed of tools/test-server/config/server.properties.
+world = ""
+world_sha256 = ""
+
+[server.properties]
+view-distance = 8
+
+[bots]
+count = 20
+rate = 5.0
+behaviour = "idle"
+prefix = "bot"
+seed = 1
+
+[measure]
+warmup = 30
+duration = 60
+attribution = false
+
+[console]
+# Same light and weather on every run: no day-night cycle, no rain.
+at_start = ["gamerule doDaylightCycle false", "time set 6000", "weather clear 1000000"]
+after_arrival = []
