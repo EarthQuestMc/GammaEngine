@@ -247,7 +247,14 @@ Constatés le 8 octobre 2026 contre le serveur de test (`test-server/`, sans mod
 
 ## Observations sur le serveur
 
-Constatées pendant les essais, sans lien avec un défaut des bots ; à vérifier avec un vrai client.
+Constatées pendant les essais, sans lien avec un défaut des bots.
+
+> **Corrigé le 8 octobre 2026 (commit `92110591`)** : les trois points ci-dessous avaient une seule
+> cause, le canal `FML` partagé par toutes les connexions. La fin de poignée de main est maintenant
+> rattachée à sa connexion (`io.github.gammaengine.network.HandshakeCompletions`). Avec
+> `--attempts 1` : 60 bots à 10 connexions/s sur 8 séries passent de 22 entrées perdues sur 480 à 0,
+> 50 bots d'un coup de 49 perdues à 0, sans plus aucune CME ni alerte de fuite. Le texte d'origine
+> reste ci-dessous pour mémoire.
 
 - **Entrée en jeu perdue lors de connexions rapprochées.** 2 bots sur 50 à 5 connexions par
   seconde, 4 sur 60 à 10 par seconde, ont terminé la poignée de main (Ack(3) reçu) sans jamais
