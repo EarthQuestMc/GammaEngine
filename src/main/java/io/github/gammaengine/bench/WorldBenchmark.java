@@ -17,6 +17,7 @@ import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Random;
 
 /**
@@ -58,6 +59,8 @@ public final class WorldBenchmark {
     private long startCpuNanos;
     private GcBeans.Totals startGc;
     private long startHeapUsed;
+    private long entitiesTicked;
+    private long tilesTicked;
     private Listener listener;
 
     private WorldBenchmark() {
@@ -195,6 +198,10 @@ public final class WorldBenchmark {
         for (int i = 0; i < chunkX.length; i++) {
             world.theChunkProviderServer.loadChunk(chunkX[i], chunkZ[i]);
         }
+        // With no player and no forced chunk, WorldServer.updateEntities stops ticking every entity
+        // and tile entity 1200 ticks after the world emptied: a run started a minute after boot
+        // would measure an idle world while reporting the full load.
+        world.resetUpdateEntityTick();
 
         if (warmupLeft > 0) {
             warmupLeft--;
@@ -204,6 +211,8 @@ public final class WorldBenchmark {
             return;
         }
 
+        entitiesTicked += world.entitiesTicked;
+        tilesTicked += world.tilesTicked;
         ticksLeft--;
         if (ticksLeft <= 0) {
             finish(false);
@@ -216,6 +225,8 @@ public final class WorldBenchmark {
         startCpuNanos = processCpuNanos();
         startGc = GcBeans.totals();
         startHeapUsed = heapUsed();
+        entitiesTicked = 0;
+        tilesTicked = 0;
         say("Measuring for " + spec.ticks() + " ticks.");
     }
 
@@ -251,22 +262,29 @@ public final class WorldBenchmark {
         StringBuilder out = new StringBuilder(2048);
         out.append("=== GammaEngine benchmark: ").append(spec.name()).append(" ===\n");
         out.append("Load: ").append(spec).append('\n');
-        out.append(String.format("Duration: %d ticks in %.2f s (%.2f TPS)%n",
+        out.append(String.format(Locale.ROOT, "Duration: %d ticks in %.2f s (%.2f TPS)%n",
                 ticks, elapsedNanos / 1.0e9, ticks / (elapsedNanos / 1.0e9)));
-        out.append(String.format("MSPT: mean=%.3f p50=%.3f p95=%.3f p99=%.3f max=%.3f ms%n",
+        out.append(String.format(Locale.ROOT, "MSPT: mean=%.3f p50=%.3f p95=%.3f p99=%.3f max=%.3f ms%n",
                 tick.meanMillis(), tick.p50Millis(), tick.p95Millis(), tick.p99Millis(), tick.maxMillis()));
 
         if (cpuNanos > 0) {
             double cores = (double) cpuNanos / elapsedNanos;
-            out.append(String.format("CPU: %.1f ms total, %.2f core(s) average, %.3f core-ms per tick%n",
+            out.append(String.format(Locale.ROOT, "CPU: %.1f ms total, %.2f core(s) average, %.3f core-ms per tick%n",
                     cpuNanos / 1.0e6, cores, cpuNanos / 1.0e6 / ticks));
         }
         out.append("GC: ").append(GcBeans.totals().since(startGc).describe()).append('\n');
-        out.append(String.format("Heap used: %.1f MiB at start, %.1f MiB at end%n",
+        out.append(String.format(Locale.ROOT, "Heap used: %.1f MiB at start, %.1f MiB at end%n",
                 startHeapUsed / 1048576.0, heapUsed() / 1048576.0));
-        out.append(String.format("World: %d chunks loaded, %d entities, %d tile entities%n",
+        out.append(String.format(Locale.ROOT, "World: %d chunks loaded, %d entities, %d tile entities%n",
                 world.theChunkProviderServer.getLoadedChunkCount(),
                 world.loadedEntityList.size(), world.loadedTileEntityList.size()));
+        // What actually ran: a load that is loaded but skipped measures nothing.
+        out.append(String.format(Locale.ROOT, "Ticked per tick: %.0f entities, %.0f tile entities%n",
+                (double) entitiesTicked / ticks, (double) tilesTicked / ticks));
+        if (!placedBlocks.isEmpty() && tilesTicked < (long) ticks * placedBlocks.size() / 10) {
+            out.append("Note: most placed hoppers did not tick. With no player nearby, tile entities are skipped"
+                    + " while skip-tileentity-ticks is true in tileentities.yml.\n");
+        }
 
         out.append('\n').append(GammaProfiler.get().buildReport());
         return out.toString();
