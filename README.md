@@ -52,7 +52,7 @@ Commandes :
 | Commande | Ce qu'elle affiche | Permission |
 | --- | --- | --- |
 | `/tps` | TPS sur 5 s à 15 min, durée des ticks, CPU, mémoire, GC, charge et coût par joueur | `bukkit.command.tps` |
-| `/mods` | Les mods Forge chargés, actifs en vert | `gamma.mods` |
+| `/mods` | Les mods Forge et les plugins Bukkit chargés : actifs en vert, désactivés en rouge, plugins fournis par un mod en bleu clair | `gamma.mods` |
 | `/chunks [dump [all]]` | Chunks, entités et TileEntities par monde ; `dump` écrit le détail dans `chunk-dumps/` | `gamma.chunks` |
 | `/findchunks [dimension]` | Les 20 chunks chargés qui portent le plus de TileEntities | `gamma.findChunks` |
 | `/heapdump` | Dump du tas dans `dumps/` (le serveur se fige pendant l'écriture) | `gamma.heap` |
