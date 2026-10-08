@@ -7,13 +7,11 @@ import io.github.gammaengine.profiler.GammaProfiler;
 import io.github.gammaengine.profiler.TickStatistics;
 
 /**
- * The AutoThread runtime: single owner of every threading decision the server makes.
+ * The engine's lifecycle and tick measurement hooks.
  *
- * <p>The contract with the rest of the server is intentionally narrow. Patched Minecraft, Forge
- * and Bukkit code calls into this class at a handful of lifecycle points; it never asks the
- * runtime "may I parallelize this", it hands over work and the runtime decides. That keeps the
- * patch surface small enough to rebase on upstream Crucible, and it keeps the decision logic in
- * one place where it can be reasoned about.
+ * <p>The contract with the rest of the server is intentionally narrow. Patched Minecraft code calls
+ * into this class at a handful of lifecycle points and nothing else, which keeps the patch surface
+ * small enough to rebase on upstream Crucible. Nothing here runs world work off the server thread.
  *
  * <p>Boot order, which matters because each step depends on the previous one:
  * <ol>
@@ -60,10 +58,6 @@ public final class AutoThreadRuntime {
         booted = true;
 
         GammaEngine.LOGGER.info("{} AutoThread runtime ready ({})", GammaEngine.NAME, CpuTopology.get());
-        if (!GammaConfig.configs.gamma_autothread_enabled) {
-            GammaEngine.LOGGER.warn("AutoThread parallelism is disabled in GammaAutoThread.yml: "
-                    + "the server will simulate on a single thread, like upstream Crucible.");
-        }
     }
 
     /** Called once the server finished loading worlds and is about to accept players. */
@@ -164,18 +158,12 @@ public final class AutoThreadRuntime {
         return mainThread;
     }
 
-    /** Whether the runtime is allowed to run world work in parallel at all. */
-    public boolean parallelismEnabled() {
-        return booted && GammaConfig.configs.gamma_autothread_enabled;
-    }
-
     /** Multi-line status text used by {@code /autothread status}. */
     public String statusText() {
         StringBuilder out = new StringBuilder(512);
         TickStatistics ticks = GammaProfiler.get().ticks();
         out.append(GammaEngine.NAME).append(" AutoThread runtime\n");
-        out.append("  State: ").append(booted ? (running ? "running" : "booted") : "not booted")
-                .append(parallelismEnabled() ? "" : " (parallelism disabled in config)").append('\n');
+        out.append("  State: ").append(booted ? (running ? "running" : "booted") : "not booted").append('\n');
         out.append("  CPU: ").append(CpuTopology.get()).append('\n');
         out.append(String.format("  TPS: %.2f / %.2f / %.2f (1m, 5m, 15m)%n",
                 ticks.tps1m(), ticks.tps5m(), ticks.tps15m()));

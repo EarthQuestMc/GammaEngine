@@ -13,7 +13,6 @@ import org.bukkit.command.CommandSender;
 
 import java.io.File;
 import java.util.List;
-import java.util.Map;
 
 /**
  * {@code /autothread}: the operator-facing window into the runtime.
@@ -29,8 +28,6 @@ public class AutoThreadCommand extends Command {
         setUsage(ChatColor.translateAlternateColorCodes('&',
                 "&7&m----------------&7[&bAutoThread&7]&m----------------\n"
                         + "&b  >&e /autothread status &7-&a runtime state, TPS and MSPT.\n"
-                        + "&b  >&e /autothread regions &7-&a active regions and their owners.\n"
-                        + "&b  >&e /autothread conflicts &7-&a observed access conflicts.\n"
                         + "&b  >&e /autothread native &7-&a native engine state.\n"
                         + "&b  >&e /autothread profile start|stop|report &7-&a profiling session.\n"
                         + "&b  >&e /autothread bench start|stop &7-&a synthetic load benchmark.\n"
@@ -51,10 +48,6 @@ public class AutoThreadCommand extends Command {
         String action = args[0].toLowerCase();
         if ("status".equals(action)) {
             sendLines(sender, AutoThreadRuntime.get().statusText());
-        } else if ("regions".equals(action)) {
-            regions(sender);
-        } else if ("conflicts".equals(action)) {
-            conflicts(sender);
         } else if ("native".equals(action)) {
             nativeEngine(sender);
         } else if ("profile".equals(action)) {
@@ -68,29 +61,6 @@ public class AutoThreadCommand extends Command {
             sender.sendMessage(usageMessage);
         }
         return true;
-    }
-
-    private void regions(CommandSender sender) {
-        // Regions arrive with the region manager; until then the server runs one implicit region
-        // per world, owned by the server thread, and saying so is more useful than an empty list.
-        sender.sendMessage(ChatColor.AQUA + "Regions:");
-        sender.sendMessage(ChatColor.GRAY + "  Region partitioning is not active yet on this build: "
-                + "world simulation runs in the single implicit region owned by the server thread.");
-    }
-
-    private void conflicts(CommandSender sender) {
-        Map<String, Long> counters = GammaProfiler.get().registry().counterValues();
-        boolean any = false;
-        sender.sendMessage(ChatColor.AQUA + "Access conflicts:");
-        for (Map.Entry<String, Long> entry : counters.entrySet()) {
-            if (entry.getKey().startsWith("conflict.") && entry.getValue() > 0) {
-                sender.sendMessage(ChatColor.GRAY + "  " + entry.getKey() + ": " + ChatColor.WHITE + entry.getValue());
-                any = true;
-            }
-        }
-        if (!any) {
-            sender.sendMessage(ChatColor.GRAY + "  None recorded.");
-        }
     }
 
     private void nativeEngine(CommandSender sender) {

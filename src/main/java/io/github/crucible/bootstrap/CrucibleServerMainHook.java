@@ -32,7 +32,7 @@ public class CrucibleServerMainHook {
         // configured, so an operator always knows which build they are looking at.
         io.github.gammaengine.util.ConsoleBanner.print(System.out,
                 "Minecraft 1.7.10  |  Forge 10.13.4.1614  |  Bukkit 1.7.10-R0.1-SNAPSHOT",
-                "Multi-core Forge + Bukkit server, powered by the AutoThread runtime");
+                "Forge + Bukkit server built for player count and fast startup");
         System.out.println("[GammaEngine] Running pre-launch tweaks");
 
         File injectFile = new File("inject.properties");

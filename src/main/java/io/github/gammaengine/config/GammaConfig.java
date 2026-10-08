@@ -22,17 +22,6 @@ import java.io.File;
 public class GammaConfig extends YamlConfig {
     public static final GammaConfig configs = new GammaConfig();
 
-    @Comments({"Master switch for the AutoThread runtime.",
-            "When false the server behaves exactly like upstream Crucible: single simulation thread,",
-            "no region ownership, no parallel ticking. Metrics and profiling keep working.",
-            "Only turn this off to compare against the baseline or to rule out AutoThread in a bug report."})
-    public boolean gamma_autothread_enabled = true;
-
-    @Comments({"Soft budget, in megabytes, for the caches the runtime is allowed to keep",
-            "(chunk snapshots waiting to be written, learning profiles, pending region state).",
-            "The runtime trims its caches when it goes over; it never hard-fails on this limit."})
-    public int gamma_memory_budgetMb = 512;
-
     @Comments({"Deflate level used for chunk packets sent to clients, 1 to 9.",
             "Measured on chunk-shaped data: level 1 is 70% faster than level 4 and produces 3.7% more",
             "bytes, level 6 costs 39% more CPU than level 4 and saves 0.08% of the bytes.",
@@ -43,14 +32,6 @@ public class GammaConfig extends YamlConfig {
 
     @Comment("Start collecting a profiling session as soon as the server finishes booting.")
     public boolean gamma_profiling_enabledAtStartup = false;
-
-    @Comments({"How often, in seconds, repeated diagnostics are aggregated into a single summary line.",
-            "A busy server can produce hundreds of thousands of identical conflict reports; without",
-            "aggregation the log becomes the bottleneck. 0 disables aggregation (debug only)."})
-    public int gamma_logging_aggregationSeconds = 60;
-
-    @Comment("Log every AutoThread decision. Extremely verbose, for development only.")
-    public boolean gamma_logging_verbose = false;
 
     @Comments({"Allow the native (Rust) engine to be loaded when the library is present.",
             "When it is missing or fails to load, the server automatically falls back to the Java",
