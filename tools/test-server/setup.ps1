@@ -5,7 +5,8 @@
 .DESCRIPTION
     Copies the newest jar of build/distributions into the target folder, unpacks libraries.zip
     with the MD5 files the server checks at startup (so the first start downloads nothing), and
-    writes the test settings of tools/test-server/config where no file exists yet.
+    writes the test settings of tools/test-server/config where no file exists yet. Also writes
+    java9args.txt and console.bat, a launcher with a visible console for testing by hand.
 
     Run ./gradlew buildPackages first. Running setup again updates the jar and the libraries and
     keeps the world and any setting already changed by hand.
@@ -68,6 +69,15 @@ Get-ChildItem -Path $templates -File | ForEach-Object {
         Copy-Item -Path $_.FullName -Destination $destination -Force
         Write-Host "[GammaEngine] Settings written: $($_.Name)"
     }
+}
+
+# The JVM arguments follow the build, so they are always refreshed; console.bat is kept once
+# written, since it is the file people edit to pick a Java or a heap size.
+Copy-Item -Path (Join-Path $repo 'java9args.txt') -Destination (Join-Path $Target 'java9args.txt') -Force
+$console = Join-Path $Target 'console.bat'
+if ($ResetConfig -or -not (Test-Path $console)) {
+    Copy-Item -Path (Join-Path $PSScriptRoot 'console.bat') -Destination $console -Force
+    Write-Host "[GammaEngine] Launcher written: console.bat"
 }
 
 $eula = Join-Path $Target 'eula.txt'

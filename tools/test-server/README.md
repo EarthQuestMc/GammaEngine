@@ -58,6 +58,24 @@ powershell -ExecutionPolicy Bypass -File tools\test-server\start.ps1 -Java "$HOM
 | `-JvmArgs` / `-- …` | Arguments JVM supplémentaires, ajoutés après les autres |
 | `-NoConsole` / `--no-console` | Pas de lecture de la console, pour un serveur en arrière-plan |
 
+### `console.bat`, pour tester à la main sous Windows
+
+`setup.ps1` dépose aussi dans le dossier du serveur un `console.bat` qu'on lance d'un double-clic :
+le serveur tourne dans sa console, on y tape les commandes, et la fenêtre reste ouverte après
+l'arrêt pour lire la fin du journal. Le fichier n'est écrit qu'une fois (ou avec `-ResetConfig`) :
+on peut le modifier. Trois variables, à fixer en tête du fichier ou avant de le lancer :
+
+| Variable | Défaut | Effet |
+| --- | --- | --- |
+| `JAVA` | `java` du PATH (Java 8, comme la production) | Toute JVM 9 ou plus reçoit `@java9args.txt`, copié à chaque `setup.ps1` |
+| `MEMORY` | `4G` | `-Xms` et `-Xmx` |
+| `JVM_ARGS` | vide | Arguments en plus, par exemple `-XX:+UseZGC -XX:+ZGenerational` sur Java 21 |
+
+Pour tester un modpack, préparer son dossier de serveur avec
+`setup.ps1 -Target <dossier> -AcceptEula`, y déposer `mods/`, `plugins/` et le monde, puis
+lancer `console.bat`. Relancer `setup.ps1` sur le même dossier met à jour le jar et les
+bibliothèques sans toucher au monde ni aux réglages.
+
 ## Réglages de test
 
 Seules les clés qui diffèrent des valeurs par défaut sont fournies ; le serveur complète le reste au
