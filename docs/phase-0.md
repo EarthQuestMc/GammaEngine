@@ -92,7 +92,7 @@ Trois niveaux, pour que la mesure ne fausse pas ce qu'elle mesure :
 | Niveau | Contenu | Coût | Activation |
 | --- | --- | --- | --- |
 | 1, toujours actif | Durée de chaque tick et de ses grandes phases, joueurs, chunks, entités, TileEntities chargés, pauses GC (notifications des MXBeans), tas | Une dizaine de `nanoTime` par tick | Toujours, export coupé par défaut |
-| 2, attribution | Temps par classe d'entité et de TileEntity, ramené au mod ou au plugin propriétaire ; temps par chunk ; temps par handler d'événement et par tâche planifiée | Deux `nanoTime` par objet tické ; ordre de grandeur attendu de quelques dizaines de ns, non mesuré : c'est la première mesure à faire | Interrupteur, pendant le banc seulement |
+| 2, attribution | Temps par classe d'entité et de TileEntity, ramené au mod ou au plugin propriétaire ; temps par chunk ; temps par handler d'événement et par tâche planifiée | Deux `nanoTime` par objet tické : mesuré de 170 à 285 ns par objet sur le banc synthétique (voir « Niveau 2 : ce qui est fait ») | Interrupteur, pendant le banc seulement |
 | 3, profil | Enregistrement JFR du scénario, attribué aux mods après coup grâce à la table classe → jar écrite au démarrage | Environ 1 % | Option du scénario |
 
 Le propriétaire d'une classe se retrouve par son jar d'origine (`CodeSource` de la classe, comparé à
@@ -126,6 +126,68 @@ Export, dans `gammaengine/bench/<exécution>/` :
 Interrupteurs dans `gammaengine.yml` : `bench.export` (faux par défaut) et `bench.attribution` (faux
 par défaut). Pilotage par la console du serveur, sans ouvrir de port : l'orchestrateur écrit les
 commandes sur l'entrée standard du processus.
+
+#### Niveau 2 : ce qui est fait
+
+Fait pour les entités et les TileEntities ; les handlers d'événements, les tâches planifiées et les
+ticks de blocs restent à faire.
+
+* Sonde : `io.github.gammaengine.metrics.TickAttribution`, appelée par quatre lignes marquées
+  `// GammaEngine` dans les deux boucles de `World.updateEntities`, juste autour de
+  `updateEntity`. Coupée, elle coûte une lecture de champ statique par objet, sans `nanoTime` ni
+  allocation. Active, deux `nanoTime` par objet, une recherche par classe (`IdentityHashMap`) et une
+  par chunk (`Long2IntOpenHashMap` de fastutil, une table par dimension), sans boxing. Un objet
+  dont le tick lève une exception n'est pas compté ; l'exception suit le même chemin qu'avant.
+  L'ordre, le curseur, le `TickLimiter` et les listes ne changent pas ; quand la sonde est active,
+  son coût entre dans le temps que voit le `TickLimiter`.
+* Activation : `gamma.bench.attribution: true` (toutes les sessions), ou
+  `/autothread record start <nom> attribution` pour une session.
+* Propriétaire d'une classe, résolu à l'arrêt de la session et mis en cache par classe : jar
+  d'origine (`CodeSource`, dont l'URL `jar:…!/classe.class` du `LaunchClassLoader` est ramenée au
+  jar) comparé aux `ModContainer.getSource()` ; chargeur `PluginClassLoader` pour un plugin
+  (`plugin:<nom>`) ; jars du serveur et dossier `libraries/` sous `minecraft` ; sinon
+  `jar:<fichier>`, ou `unknown` sans `CodeSource`. Un jar qui contient plusieurs mods est partagé
+  par le paquet de la classe `@Mod` le plus proche, à égalité le premier mod chargé.
+* `mods.csv` : `owner,type,class,ticks,total_ms,mean_us`, une ligne par classe, triée par temps
+  total décroissant. `chunks.csv` :
+  `dimension,chunk_x,chunk_z,block_x,block_z,total_ms,entity_ticks,tile_entity_ticks`, les 200
+  chunks les plus coûteux ; `block_x` et `block_z` sont le centre du chunk. `summary.json` reçoit
+  un bloc `attribution` : actif ou non, temps attribué (total, entités, TileEntities), part du
+  temps de tick, nombre de ticks d'objets, de classes et de chunks, et les dix premiers
+  propriétaires.
+
+Coût mesuré le 8 octobre 2026 sur le poste de développement (Windows 11, 24 threads, HotSpot
+8u491, `-Xmx1G`, deux autres serveurs de test actifs sur la machine), sous la charge de
+`/autothread bench chunks=8`, par fenêtres de 2,5 s alternées sans et avec attribution, en régime
+établi :
+
+| Charge (entités / TileEntities posées) | Paires | Objets tickés par tick | MSPT moyen sans / avec | p95 sans / avec | Surcoût par objet |
+| --- | --- | --- | --- | --- | --- |
+| 1500 / 1500 (3 démarrages) | 12 | 2 484 | 9,53 / 9,95 ms | 15,35 / 16,15 ms | 170 ns (écart type de la moyenne 100 ns) |
+| 1500 / 6000 (2 démarrages) | 8 | 6 269 | 8,01 / 9,79 ms | 12,51 / 15,73 ms | 285 ns (75 ns) |
+
+* Isolés, un `nanoTime` coûte 20 ns et `AttributionTable.record` 7 ns : 47 ns par objet en boucle
+  serrée. Coupée, la sonde coûte 0,15 ns par objet, sous le bruit de mesure.
+* L'écart s'explique, d'après un second micro-banc, par la sérialisation : `nanoTime`
+  (QueryPerformanceCounter sous Windows) attend la fin des défauts de cache de l'objet précédent,
+  que le processeur recouvrait sinon d'un objet à l'autre. Sur 400 000 objets dispersés en mémoire
+  avec un tick minimal, la boucle passe de 6 à 120 ns par objet avec deux `nanoTime`. Les objets
+  légers (entonnoirs) paient donc le plus.
+* Conséquences : avec l'attribution, compter quelques centaines de ns par objet tické, soit de 4 à
+  20 % de MSPT en plus sur ces charges ; comparer seulement niveau 2 contre niveau 2. Le temps
+  attribué à un objet inclut une partie du coût des deux `nanoTime` : la colonne `mean_us` des
+  entonnoirs (0,10 µs) en est surtout faite.
+
+Deux limites du banc synthétique, constatées pendant cette mesure :
+
+* Sans joueur ni chunk forcé, `WorldServer.updateEntities` cesse d'appeler `World.updateEntities`
+  après 1200 ticks (`WorldServer.java:657-663`), compteur remis à zéro seulement par un changement
+  de dimension : sur un serveur sans joueur, un `/autothread bench` lancé plus d'une minute après
+  le démarrage n'exécute plus le tick d'aucune entité ni TileEntity, alors que son rapport annonce
+  la durée demandée. La mesure ci-dessus tient donc dans la première minute de chaque démarrage.
+* Les entonnoirs posés par le banc ne tickent pas sans joueur proche
+  (`settings.skip-tileentity-ticks: true`, `CauldronHooks.canTileEntityTick`) ; la mesure a été
+  faite avec `skip-tileentity-ticks: false` dans `tileentities.yml` du serveur de test.
 
 ### 4. L'orchestrateur et la comparaison
 
