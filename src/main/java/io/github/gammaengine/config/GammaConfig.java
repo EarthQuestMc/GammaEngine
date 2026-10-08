@@ -52,6 +52,14 @@ public class GammaConfig extends YamlConfig {
             "implementations, so turning this off only costs performance, never compatibility."})
     public boolean gamma_native_enabled = true;
 
+    @Comments({"Startup library check: remember the size, date and MD5 of every library jar that passed, in",
+            "libraries/.gammaengine-library-check, and do not hash a jar again while its size, its date and its",
+            ".md5 file are unchanged (about 100 MB read on every boot otherwise). A changed jar is always",
+            "hashed again; a missing or damaged cache file just means a full check. false hashes every jar on",
+            "every boot. Read before the libraries are loaded, by a small reader of this file, so",
+            "-Dgammaengine.libraryCheckCache=false (or a line in inject.properties) works even if it is broken."})
+    public boolean gamma_startup_libraryCheckCache = true;
+
     private GammaConfig() {
         CONFIG_FILE = new File("gammaengine.yml");
         CONFIG_MODE = ConfigMode.PATH_BY_UNDERSCORE;

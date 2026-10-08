@@ -8,10 +8,10 @@ JVM du dépôt de test : Java HotSpot 1.8.0_491, 5 « mods » (aucun mod utilisa
 | # | Étape | Thread | Classloader | Preuve |
 |---|-------|--------|-------------|--------|
 | 1 | `java -jar server.jar` : le manifeste donne `Main-Class: cpw.mods.fml.relauncher.ServerLaunchWrapper`, `TweakClass: …FMLTweaker` et un `Class-Path` généré = tous les jars de `libraries/` ; aucun `Add-Opens`, aucun `Launcher-Agent` | `main` | chargeur d'application (système) | `build.gradle:165-175`, `build.gradle:267-274` |
-| 2 | `ServerLaunchWrapper.main` appelle d'abord `CrucibleServerMainHook.relaunchMain(args)`. Malgré son nom, **aucun processus n'est relancé** (pas de `ProcessBuilder` dans `bootstrap/`) : bannière, `inject.properties`, `checkJava`, vérification des bibliothèques | `main` | système | `E/cpw/mods/fml/relauncher/ServerLaunchWrapper.java:14` ; `S/io/github/crucible/bootstrap/CrucibleServerMainHook.java:30-75` |
-| 2a | `inject.properties` (créé s'il manque à partir de la ressource, vide par défaut) : chaque entrée devient une propriété système | `main` | système | `CrucibleServerMainHook.java:38-58` ; `src/main/resources/inject.properties` = 0 octet |
+| 2 | `ServerLaunchWrapper.main` appelle d'abord `CrucibleServerMainHook.relaunchMain(args)`. Malgré son nom, **aucun processus n'est relancé** (pas de `ProcessBuilder` dans `bootstrap/`) : bannière, `inject.properties`, `checkJava`, vérification des bibliothèques | `main` | système | `E/cpw/mods/fml/relauncher/ServerLaunchWrapper.java:14` ; `S/io/github/crucible/bootstrap/CrucibleServerMainHook.java:33-79` |
+| 2a | `inject.properties` (créé s'il manque à partir de la ressource, vide par défaut) : chaque entrée devient une propriété système | `main` | système | `CrucibleServerMainHook.java:41-61` ; `src/main/resources/inject.properties` = 0 octet |
 | 2b | `Lwjgl3ifyGlue.checkJava` : messages, refus si Java 17 < 17.0.6 (`lwjgl3ify.skipjavacheck` le coupe) | `main` | système | `S/io/github/crucible/bootstrap/Lwjgl3ifyGlue.java:59-103` |
-| 2c | `verifyLibraries` → `LibraryManager.checkIntegrity` : MD5 de chaque jar de `libraries/` comparé au `.md5` voisin, en parallèle (pool de `physicalCores` threads `GammaEngine-LibraryCheck`) ; si échec : `setupLibraries` télécharge puis `System.exit(0)` (« redémarrage requis ») | `main` + pool | système | `CrucibleServerMainHook.java:65-72,83-111` ; `S/io/github/crucible/bootstrap/LibraryManager.java:174-250` |
+| 2c | `verifyLibraries` → `LibraryManager.checkIntegrity` : chaque jar de `libraries/` est comparé au `.md5` voisin, en parallèle (pool de `physicalCores` threads `GammaEngine-LibraryCheck`). Un jar dont la taille, la date de modification et le `.md5` n'ont pas changé depuis le dernier contrôle réussi (mémorisés dans `libraries/.gammaengine-library-check`) n'est pas relu ; tout autre jar est haché comme avant. Le cache n'est réécrit (fichier temporaire puis renommage) qu'après un contrôle complet réussi ; absent, illisible ou abîmé, il vaut « tout hacher ». Interrupteur `gamma.startup.libraryCheckCache`, lu par `EarlyConfig` sans SnakeYAML (pas encore vérifié à ce stade) ; `-Dgammaengine.libraryCheckCache` prime. Si échec : `setupLibraries` télécharge puis `System.exit(0)` (« redémarrage requis ») | `main` + pool | système | `CrucibleServerMainHook.java:65-77,87-137` ; `S/io/github/crucible/bootstrap/LibraryManager.java:175-273` ; `S/io/github/gammaengine/startup/LibraryCheckCache.java`, `EarlyConfig.java` |
 | 3 | `ServerLaunchWrapper.run` charge par réflexion `net.minecraft.launchwrapper.Launch` (jar externe `io.github.cruciblemc:launchwrapper:1.13`, `run/libraries/io/github/cruciblemc/launchwrapper/1.13/`) et appelle `main` avec `--tweakClass …FMLServerTweaker` | `main` | système | `ServerLaunchWrapper.java:28,41-46` |
 | 4 | `Launch.main` : construit `LaunchClassLoader` avec les URL tirées de la propriété `java.class.path` (sous `java -jar` : le jar serveur seul), instancie les tweakers (`FMLTweaker()` installe `FMLSecurityManager` ; `FMLServerTweaker`) | `main` | `LaunchClassLoader` créé ; `Launch.classLoader` | `javap` de `Launch.getURLs` (jar launchwrapper-1.13) ; `E/cpw/mods/fml/common/launcher/FMLTweaker.java:30-43` |
 | 5 | `FMLServerTweaker.injectIntoClassLoader` : exclusions, `FMLLaunchHandler.configureForServerLaunch` → `setupHome` → `CoreModManager.handleLaunch` | `main` | `LaunchClassLoader` | `E/cpw/mods/fml/common/launcher/FMLServerTweaker.java:14-25` ; `E/cpw/mods/fml/relauncher/FMLLaunchHandler.java:37,70-77,111-113` |
@@ -31,8 +31,9 @@ Point structurant : **les mods et le moteur partagent un seul classloader** (`La
 | Élément | `chemin:ligne` | Rôle | Patch Crucible |
 |---|---|---|---|
 | `ServerLaunchWrapper.main/run` | `E/cpw/mods/fml/relauncher/ServerLaunchWrapper.java:12-54` | point d'entrée, délègue à LaunchWrapper | oui : `P/cpw/mods/fml/relauncher/ServerLaunchWrapper.java.patch` (appel `relaunchMain`) |
-| `CrucibleServerMainHook.relaunchMain/verifyLibraries/setupLibraries` | `S/io/github/crucible/bootstrap/CrucibleServerMainHook.java:30,83,94` | pré-lancement | ajout Crucible, instrumenté par GammaEngine (durée de vérification, ligne 62-66) |
-| `LibraryManager.checkIntegrity/checkOne/digestOf` | `S/io/github/crucible/bootstrap/LibraryManager.java:174,230,253` | MD5 des libs, parallèle (GammaEngine) | Crucible |
+| `CrucibleServerMainHook.relaunchMain/verifyLibraries/setupLibraries` | `S/io/github/crucible/bootstrap/CrucibleServerMainHook.java:33,87,120` | pré-lancement | ajout Crucible, instrumenté par GammaEngine (durée de vérification, jars hachés et jars repris du cache, lignes 65-77) |
+| `LibraryManager.checkIntegrity/checkOne/digestOf` | `S/io/github/crucible/bootstrap/LibraryManager.java:184,241,276` | MD5 des libs, parallèle, saute les jars inchangés (GammaEngine) | Crucible |
+| `LibraryCheckCache` / `EarlyConfig` | `S/io/github/gammaengine/startup/` | cache du contrôle des libs (taille, date, MD5 vérifié par jar) ; lecture minimale de `gammaengine.yml` avant que SnakeYAML et log4j soient vérifiés. JDK seul, chargés par le chargeur système | GammaEngine |
 | `CrucibleMetadata` (statique) | `S/io/github/crucible/bootstrap/CrucibleMetadata.java:21-58` | lit le manifeste (`Forge-Version`, `GammaEngine-Libs`) ; lève si build Forge = 0 | Crucible |
 | `FMLTweaker()` / `FMLSecurityManager` | `E/cpw/mods/fml/common/launcher/FMLTweaker.java:30-43` ; `P/cpw/mods/fml/relauncher/FMLSecurityManager.java.patch` | installe un `SecurityManager` (autorisé par `-Djava.security.manager=allow`, `java9args.txt:2`) ; le patch ajoute `defman` | oui |
 | `CoreModManager.handleLaunch` | `E/cpw/mods/fml/relauncher/CoreModManager.java:175-250` | coremods, tweakers, hook Crucible ligne 222 | oui (`P/cpw/mods/fml/relauncher/CoreModManager.java.patch`) |
@@ -109,12 +110,13 @@ La liste d'exclusions de transformer (`addTransformerExclusion`) évite de réé
 
 | Clé | Fichier | Défaut | Effet |
 |---|---|---|---|
-| (propriétés libres) | `inject.properties` (racine du serveur) | vide | injectées dans `System` avant tout (`CrucibleServerMainHook.java:49-58`) |
-| `crucible.skipLibraryVerification` | propriété système | faux | saute le MD5 des libs (`CrucibleServerMainHook.java:84`) |
-| `crucible.libraryRepos` | propriété système | vide | dépôts Maven supplémentaires séparés par espaces (`:100`) |
+| (propriétés libres) | `inject.properties` (racine du serveur) | vide | injectées dans `System` avant tout (`CrucibleServerMainHook.java:52-61`) |
+| `crucible.skipLibraryVerification` | propriété système | faux | saute le MD5 des libs (`CrucibleServerMainHook.java:88`) |
+| `gammaengine.libraryCheckCache` | propriété système (ou `inject.properties`) | absente | prime sur `gamma.startup.libraryCheckCache` de `gammaengine.yml`, utile si ce fichier est cassé (`S/io/github/gammaengine/startup/EarlyConfig.java`) |
+| `crucible.libraryRepos` | propriété système | vide | dépôts Maven supplémentaires séparés par espaces (`:126`) |
 | `crucible.weAreJava9` | propriété système (posée dans `java9args.txt:4`) | faux | masque l'avertissement « arguments Java 9 absents » (`Lwjgl3ifyGlue.java:63`) |
 | `lwjgl3ify.skipjavacheck` | propriété système | faux | saute le refus Java 17 < 17.0.6 (`:74`) |
-| `crucible.i.know.what.i.am.doing.please.crash.the.server` | propriété système | faux | plante volontairement `serverMain` (`CrucibleServerMainHook.java:79`) |
+| `crucible.i.know.what.i.am.doing.please.crash.the.server` | propriété système | faux | plante volontairement `serverMain` (`CrucibleServerMainHook.java:83`) |
 | `thermos.fastcraft.disable` | propriété système | `true` | ignore FastCraft (`CoreModManager.java:366,399`) |
 | `thermos.forgeRevision` | propriété système | `0` (puis `fmlversion.properties`) | numéro de build Forge (`CrucibleMetadata.java:38`) |
 | `fml.coreMods.load` | propriété système | vide | coremods supplémentaires (`CoreModManager.java:226`) |
@@ -128,6 +130,7 @@ La liste d'exclusions de transformer (`addTransformerExclusion`) évite de réé
 | `plugin-settings.allow-reload` | `cauldron.yml` | `false` (`run/cauldron.yml:14`) | autorise `/reload` |
 | `lwjgl3ify_extensibleEnums` | `Gamma.yml` (migré depuis `Crucible.yml`) | liste `DEFAULT_EXTENSIBLE_ENUMS` (≈ 50 enums) | enums rendus extensibles (`CrucibleConfigs.java:212,215-244`) |
 | `gamma.native.enabled`, `gamma.profiling.enabledAtStartup`, `gamma.network.chunkCompressionLevel` | `gammaengine.yml` (ancien nom `GammaAutoThread.yml`, renommé au démarrage) | `true`, `false`, `4` | chargement de la bibliothèque native, profilage dès le démarrage, niveau deflate des paquets de chunks (`S/io/github/gammaengine/config/GammaConfig.java`) |
+| `gamma.startup.libraryCheckCache` | `gammaengine.yml`, mais lu au pré-lancement par `EarlyConfig` (lecteur de lignes minimal) ; déclaré dans `GammaConfig` pour figurer dans le fichier généré | `true` | `false` : MD5 de chaque bibliothèque à chaque démarrage, sans cache (`S/io/github/gammaengine/startup/EarlyConfig.java`) |
 
 ## Pièges pour la suite
 
@@ -147,13 +150,13 @@ La liste d'exclusions de transformer (`addTransformerExclusion`) évite de réé
 
 | Élément | État | Preuve | Interrupteur |
 |---|---|---|---|
-| Hash par jar | absent (seul MD5 des **bibliothèques** moteur ; `XxHash64` existe mais n'est utilisé que par `NativeEngine`) | `LibraryManager.java:253-262` ; `grep XxHash64` : `NativeEngine.java`, `XxHash64.java` | — |
+| Hash par jar | absent (seul MD5 des **bibliothèques** moteur, sauté pour un jar inchangé depuis le dernier contrôle ; `XxHash64` existe mais n'est utilisé que par `NativeEngine`) | `LibraryManager.java:276-285` ; `grep XxHash64` : `NativeEngine.java`, `XxHash64.java` | — |
 | Analyse de bytecode par classe | absent (aucun `ClassReader`/`ClassNode` dans `io.github.gammaengine` ; seul le scan d'annotations FML) | recherche dans `S/io/github/gammaengine/` : 0 | — |
 | Classement série / parallèle | absent (aucune classification de mod ; `AutoThreadRuntime` ne porte que le cycle de vie et la mesure du tick) | `AutoThreadRuntime.java` | — |
 | Garde-fou de thread | absent (`AsyncCatcher` non trouvé) | cf. tableau des accroches | — |
 | Rétrogradation à chaud | absent | pas de bascule d'état par classe | — |
 | Cache des décisions | absent | aucun fichier de cache dans `run/gammaengine` hors `native`, `reports` | — |
-| Rapport au démarrage | partiel : durée de vérification des libs, rapport mémoire `/autothread memory`, bannière ; rien par mod ni par plugin | `CrucibleServerMainHook.java:62-73` ; `S/io/github/gammaengine/diag/MemoryReport.java` ; `run/gammaengine/reports` | — |
+| Rapport au démarrage | partiel : durée de vérification des libs, rapport mémoire `/autothread memory`, bannière ; rien par mod ni par plugin | `CrucibleServerMainHook.java:65-77` ; `S/io/github/gammaengine/diag/MemoryReport.java` ; `run/gammaengine/reports` | — |
 | Exécuteurs Bukkit en bytecode | absent (réflexion `method.invoke`) | `JavaPluginLoader.java:324-337` | — |
 | Cache des classes transformées | absent (seuls des caches mémoire du `LaunchClassLoader` ; dump disque en débogage) | `javap` : champs `cachedClasses`, `resourceCache` ; `legacy.debugClassLoadingSave` | `legacy.debugClassLoadingSave` (débogage seulement) |
 | Cache du scan d'annotations | absent (`JarDiscoverer` relit tous les jars à chaque démarrage) | `JarDiscoverer.java:62-85` | — |

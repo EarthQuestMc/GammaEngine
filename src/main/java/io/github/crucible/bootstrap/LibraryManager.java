@@ -1,5 +1,6 @@
 package io.github.crucible.bootstrap;
 
+import io.github.gammaengine.startup.LibraryCheckCache;
 import org.jetbrains.annotations.NotNull;
 
 import java.io.ByteArrayInputStream;
@@ -172,11 +173,21 @@ public class LibraryManager {
      * mismatch still means "reinstall the libraries".
      */
     public static boolean checkIntegrity(Path libraryRoot, String[] neededLibraries) throws IOException, NoSuchAlgorithmException {
+        return checkIntegrity(libraryRoot, neededLibraries, LibraryCheckCache.disabled());
+    }
+
+    /**
+     * Same check, but a jar that {@code cache} knows as verified and unchanged since (same size,
+     * same timestamp, same expected MD5) is not hashed again. Every other jar is hashed and judged
+     * exactly as before. The caller saves the cache once this returned true.
+     */
+    public static boolean checkIntegrity(Path libraryRoot, String[] neededLibraries, LibraryCheckCache cache)
+            throws IOException, NoSuchAlgorithmException {
         int workers = Math.max(1, Math.min(io.github.gammaengine.platform.CpuTopology.get().physicalCores(),
                 neededLibraries.length));
         if (workers == 1 || neededLibraries.length < 4) {
             for (String neededLibrary : neededLibraries) {
-                if (!checkOne(libraryRoot, neededLibrary)) {
+                if (!checkOne(libraryRoot, neededLibrary, cache)) {
                     return false;
                 }
             }
@@ -198,7 +209,7 @@ public class LibraryManager {
                 results.add(executor.submit(new Callable<Boolean>() {
                     @Override
                     public Boolean call() throws Exception {
-                        return checkOne(libraryRoot, neededLibrary);
+                        return checkOne(libraryRoot, neededLibrary, cache);
                     }
                 }));
             }
@@ -227,7 +238,7 @@ public class LibraryManager {
         }
     }
 
-    private static boolean checkOne(Path libraryRoot, String neededLibrary)
+    private static boolean checkOne(Path libraryRoot, String neededLibrary, LibraryCheckCache cache)
             throws IOException, NoSuchAlgorithmException {
         String[] identifiers = neededLibrary.split(":");
         if (identifiers.length != 3) {
@@ -246,7 +257,19 @@ public class LibraryManager {
             System.out.println("[GammaEngine] Skipping verification of " + neededLibrary);
             return true;
         }
-        return checksum.equalsIgnoreCase(encodeHex(digestOf(jarFile)));
+        // GammaEngine - size and timestamp are read before hashing and again after: a jar that
+        // changed in between is hashed again next time instead of being remembered.
+        LibraryCheckCache.FileState before = cache.enabled() ? LibraryCheckCache.FileState.of(jarFile) : null;
+        if (before != null && cache.isUnchanged(neededLibrary, before, checksum)) {
+            return true;
+        }
+        String actual = encodeHex(digestOf(jarFile));
+        if (!checksum.equalsIgnoreCase(actual)) {
+            return false;
+        }
+        cache.recordHashed(neededLibrary, before, before == null ? null : LibraryCheckCache.FileState.of(jarFile),
+                actual, System.currentTimeMillis());
+        return true;
     }
 
     /** Streams a file through MD5 without ever holding it in memory. */
