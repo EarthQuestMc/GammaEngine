@@ -31,6 +31,7 @@ public final class ConsoleInput {
      */
     public boolean isDead(String line) {
         if (line == null) {
+            GammaEngine.LOGGER.info("Console input ended: console commands are disabled until the next start.");
             return true;
         }
         long now = System.nanoTime();
@@ -41,7 +42,8 @@ public final class ConsoleInput {
         if (++blankLines < DEAD_INPUT_BLANK_LINES) {
             return false;
         }
-        GammaEngine.LOGGER.warn("Console input is not readable (no console attached?): console commands are disabled. "
+        // On Windows a closed pipe also reads as endless blank lines, so this is not always an error.
+        GammaEngine.LOGGER.warn("Console input closed or unreadable: console commands are disabled until the next start. "
                 + "Start the server with --noconsole to skip the console entirely.");
         return true;
     }
