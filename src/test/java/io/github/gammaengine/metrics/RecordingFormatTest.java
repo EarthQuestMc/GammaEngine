@@ -30,6 +30,18 @@ public class RecordingFormatTest {
     }
 
     @Test
+    public void gcTallyKeepsCountTotalAndLongest() {
+        Recording.GcTally tally = new Recording.GcTally();
+        tally.add(3);
+        tally.add(7);
+        tally.add(1);
+        assertEquals(3, tally.count());
+        assertEquals("3 pause(s) 11 ms total 7 ms max", tally.text("pause(s)"));
+        assertEquals("\"count\": 3, \"total_ms\": 11, \"max_ms\": 7", tally.jsonFields());
+        assertEquals(8, Recording.GC_HEADER.split(",").length);
+    }
+
+    @Test
     public void msptSummaryIsExactOverTheGivenTicks() {
         long[] nanos = new long[200];
         for (int i = 0; i < 100; i++) {

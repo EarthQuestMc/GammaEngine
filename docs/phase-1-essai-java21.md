@@ -128,7 +128,7 @@ machine d'essai et ne sont pas versionnées : un essai se rejoue avec le scénar
 | Correction | État |
 | --- | --- |
 | 1. `--illegal-access=warn` | Fait : retiré de `java9args.txt` (ignoré depuis Java 17 ; Java 9 à 16 se comportent désormais comme 17) |
-| 4. Cycles et pauses GC | Fait pour `/tps` (`ServerHealth`) et le rapport du banc (`WorldBenchmark`) via `metrics/GcBeans` ; `Recording` (`summary.json`, `gc.csv`) suit |
+| 4. Cycles et pauses GC | Fait : `metrics/GcBeans` classe les beans ; `/tps`, le rapport du banc et `summary.json` comptent les pauses à part (`gc.concurrent_cycles`), `gc.csv` a une colonne `kind` |
 | 5. Encodage de la console | Fait : `-Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8` dans `java9args.txt`, et `ConsoleBanner` lit l'encodage réel de `System.out` selon la version de Java |
 | 6. `-XX:+ZGenerational` | Fait pour le serveur de test : `start.ps1 -Gc zgc` / `start.sh --gc zgc` ne l'ajoutent que sur Java 21 et 22 ; `-GcLog` / `--gc-log` écrit le journal des safepoints |
 | 11. Listes vides au premier démarrage | Fait : modèles `ops.json`, `whitelist.json`, `banned-players.json`, `banned-ips.json` dans `tools/test-server/config/` |

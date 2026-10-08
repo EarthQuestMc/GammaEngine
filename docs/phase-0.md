@@ -118,7 +118,7 @@ Export, dans `gammaengine/bench/<exécution>/` :
 | Fichier | Contenu |
 | --- | --- |
 | `ticks.csv` | Une ligne par tick : durée, phases, joueurs, chunks, entités, TileEntities |
-| `gc.csv` | Une ligne par pause : collecteur, durée, tas avant et après |
+| `gc.csv` | Une ligne par collection : collecteur, durée, tas avant et après, `kind` (`pause` pour un arrêt du monde, `cycle` pour un cycle concurrent de ZGC, Shenandoah ou G1, qui ne bloque pas le serveur) |
 | `mods.csv` | Niveau 2 : temps cumulé par mod ou plugin et par type d'objet |
 | `chunks.csv` | Niveau 2 : les chunks les plus coûteux avec leur contenu |
 | `summary.json` | Résumé : percentiles, coût par joueur, versions, arguments JVM, commit |

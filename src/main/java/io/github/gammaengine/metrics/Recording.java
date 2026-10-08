@@ -54,7 +54,7 @@ import java.util.concurrent.atomic.AtomicLong;
 final class Recording {
     static final String TICKS_HEADER = "tick,time_ms,tick_ns,worlds_ns,other_ns,players,chunks,entities,"
             + "tile_entities,entities_ticked,tiles_ticked,heap_used_bytes";
-    static final String GC_HEADER = "time_ms,collector,action,cause,duration_ms,heap_before_bytes,heap_after_bytes";
+    static final String GC_HEADER = "time_ms,collector,action,cause,duration_ms,heap_before_bytes,heap_after_bytes,kind";
 
     private static final long WRITE_INTERVAL_MILLIS = 500L;
 
@@ -73,9 +73,8 @@ final class Recording {
 
     private final ConcurrentLinkedQueue<long[]> tickRows = new ConcurrentLinkedQueue<long[]>();
     private final ConcurrentLinkedQueue<String> gcRows = new ConcurrentLinkedQueue<String>();
-    private final AtomicLong gcCount = new AtomicLong();
-    private final AtomicLong gcTotalMillis = new AtomicLong();
-    private final AtomicLong gcMaxMillis = new AtomicLong();
+    private final GcTally gcPauses = new GcTally();
+    private final GcTally gcCycles = new GcTally();
     private final List<Runnable> gcUnsubscribers = new ArrayList<Runnable>();
 
     private final Writer ticksOut;
@@ -204,15 +203,42 @@ final class Recording {
             after += usage.getUsed();
         }
         long duration = gc.getDuration();
-        gcCount.incrementAndGet();
-        gcTotalMillis.addAndGet(duration);
-        long max;
-        do {
-            max = gcMaxMillis.get();
-        } while (duration > max && !gcMaxMillis.compareAndSet(max, duration));
+        // A concurrent cycle runs beside the server: counting it as a pause would report ZGC's
+        // 300 ms cycles as 300 ms stalls.
+        boolean concurrent = GcBeans.isConcurrent(info.getGcName());
+        (concurrent ? gcCycles : gcPauses).add(duration);
 
         gcRows.add(System.currentTimeMillis() + "," + csv(info.getGcName()) + "," + csv(info.getGcAction()) + ","
-                + csv(info.getGcCause()) + "," + duration + "," + before + "," + after);
+                + csv(info.getGcCause()) + "," + duration + "," + before + "," + after + ","
+                + (concurrent ? "cycle" : "pause"));
+    }
+
+    /** Count, total and longest duration of one kind of collection. Updated from the JMX thread. */
+    static final class GcTally {
+        private final AtomicLong count = new AtomicLong();
+        private final AtomicLong totalMillis = new AtomicLong();
+        private final AtomicLong maxMillis = new AtomicLong();
+
+        void add(long millis) {
+            count.incrementAndGet();
+            totalMillis.addAndGet(millis);
+            long max;
+            do {
+                max = maxMillis.get();
+            } while (millis > max && !maxMillis.compareAndSet(max, millis));
+        }
+
+        long count() {
+            return count.get();
+        }
+
+        String text(String what) {
+            return count.get() + " " + what + " " + totalMillis.get() + " ms total " + maxMillis.get() + " ms max";
+        }
+
+        String jsonFields() {
+            return "\"count\": " + count.get() + ", \"total_ms\": " + totalMillis.get() + ", \"max_ms\": " + maxMillis.get();
+        }
     }
 
     private void drainLoop() {
@@ -310,8 +336,10 @@ final class Recording {
         if (mspt != null && playersMean > 0) {
             text.append(String.format(Locale.ROOT, ", %.3f ms per player", mspt.mean() / playersMean));
         }
-        text.append(String.format(Locale.ROOT, ", GC %d collection(s) %d ms total %d ms max",
-                gcCount.get(), gcTotalMillis.get(), gcMaxMillis.get()));
+        text.append(", GC ").append(gcPauses.text("pause(s)"));
+        if (gcCycles.count() > 0) {
+            text.append(", ").append(gcCycles.text("concurrent cycle(s)"));
+        }
         if (report != null) {
             text.append(", ").append(report.text(tickNanos));
         }
@@ -376,9 +404,9 @@ final class Recording {
         field(json, "cost_per_player_ms", mspt != null && playersMean > 0 ? number(mspt.mean() / playersMean) : "null");
         field(json, "budget_per_player_ms", playersMean > 0 ? number(50.0 / playersMean) : "null");
         field(json, "attribution", attributionJson);
-        json.append("  \"gc\": {\"count\": ").append(gcCount.get())
-                .append(", \"total_ms\": ").append(gcTotalMillis.get())
-                .append(", \"max_ms\": ").append(gcMaxMillis.get()).append("}\n");
+        // count, total_ms and max_ms are stop-the-world pauses; concurrent cycles are apart.
+        json.append("  \"gc\": {").append(gcPauses.jsonFields())
+                .append(", \"concurrent_cycles\": {").append(gcCycles.jsonFields()).append("}}\n");
         return json.append("}\n").toString();
     }
 
