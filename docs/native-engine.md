@@ -8,20 +8,23 @@ utilise les implémentations Java.
 
 ## Ce qu'il accélère, et pourquoi ces choses-là
 
-Rust est employé là où trois conditions sont réunies : le travail est limité par le CPU, il arrive
-par blocs assez gros pour amortir une transition JNI, et il ne touche aucun état mutable du monde.
-Cela exclut la boucle de tick, les entités, les TileEntities, le bus d'événements Forge et Bukkit,
-et cela inclut :
+Rust est réservé à ce qui traite de gros blocs d'octets avec peu d'allers-retours : le proxy
+(connexion, anti-bot, limitation de débit, routage, relais du handshake Forge), le stockage des
+chunks (zstd, I/O asynchrones, convertisseur Anvil) et les outils hors ligne. Jamais le tick, les
+entités, les TileEntities, la lumière, le pathfinding ni les API. Chaque bibliothèque native passe
+par JNI et a un repli en Java pur. Ce travail est la phase 12 de la [feuille de route](roadmap.md).
 
-| Opération | Où elle sert | État |
+Ce qui existe déjà, et qui servira au stockage des chunks :
+
+| Opération | Où elle servira | État |
 | --- | --- | --- |
-| Compression zlib | Écriture d'un chunk dans un fichier region | Implémenté |
-| Décompression zlib | Lecture d'un chunk depuis un fichier region | Implémenté |
-| XXH64 | Hachage des snapshots de chunks, intégrité et déterminisme du monde | Implémenté |
+| Compression zlib | Écriture d'un chunk dans un fichier region | Implémenté et testé |
+| Décompression zlib | Lecture d'un chunk depuis un fichier region | Implémenté et testé |
+| XXH64 | Intégrité et déterminisme du monde, hachage du contenu des chunks | Implémenté et testé |
 | Arithmétique et validation des secteurs de fichier region | Réparation et allocation de fichiers region | Implémenté (fonctions pures) |
-| Encodage et décodage binaire NBT | Pipeline de sauvegarde et chargement de chunks | Prévu |
-| Pathfinding sur snapshots immuables | IA des mobs, hors du thread de région | Prévu, phase 10 |
-| Collisions et recherches spatiales par lots | Déplacement des entités | Prévu, phase 10 |
+
+Le serveur charge la bibliothèque au démarrage quand elle est présente, mais aucun chemin du serveur
+ne l'appelle encore : seuls les tests s'en servent.
 
 ## Résultats mesurés
 
