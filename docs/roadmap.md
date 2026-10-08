@@ -64,7 +64,7 @@ l'interrupteur de configuration ajouté, les risques de compatibilité, la suite
 | Phase | Sujet | État |
 | --- | --- | --- |
 | 0 | Banc de test : bots 1.7.10, scénarios, métriques | **Plan prêt** : [phase-0.md](phase-0.md) |
-| 1 | JVM 21 avec ZGC, script de lancement, compatibilité | À faire (lwjgl3ify et `java9args.txt` déjà présents) |
+| 1 | JVM 21 avec ZGC, script de lancement, compatibilité | **Premier essai fait**, sans mods : [phase-1-essai-java21.md](phase-1-essai-java21.md) |
 | 2 | Audit et neutralisation du code inutile | **Audit fait** : [audit-code-inutile.md](audit-code-inutile.md) |
 | 3 | Système de compatibilité automatique | À faire |
 | 4 | Boucle de tick | À faire |
@@ -113,7 +113,9 @@ Contenu :
 
 Critères de sortie : le serveur démarre et tient le banc sur Java 21 avec le modpack d'EarthQuest ;
 pauses GC sous 10 ms mesurées ; comparaison avant et après sur le banc. Java 25 est à évaluer plus
-tard.
+tard : il demande d'abord de remplacer le `SecurityManager` de FML, retiré en Java 24.
+
+Premier essai sur un monde vide, sans mod : [phase-1-essai-java21.md](phase-1-essai-java21.md).
 
 ## Phase 2 — Code inutile
 
