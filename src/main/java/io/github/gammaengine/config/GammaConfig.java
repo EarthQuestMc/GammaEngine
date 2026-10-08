@@ -10,14 +10,11 @@ import io.github.gammaengine.GammaEngine;
 import java.io.File;
 
 /**
- * Administrator-facing configuration of the AutoThread runtime, stored in {@code GammaAutoThread.yml}.
+ * Administrator-facing configuration of the engine, stored in {@code gammaengine.yml}.
  *
- * <p>The design rule of this file is that it contains resource limits and diagnostics switches,
- * and nothing else. There is deliberately no way to declare a mod thread-safe, to pin a plugin to
- * a thread, or to pick a threading mode: those decisions belong to the runtime, which observes
- * what the code actually does, and an administrator guessing them wrong would corrupt worlds.
- *
- * <p>Zero means "decide automatically" for every sizing option.
+ * <p>Every option is optional: the server must run with no file at all. Each optimisation gets its
+ * own switch here. There is deliberately no way to declare a mod thread-safe or to list mods: the
+ * engine handles any jar by itself, and an administrator guessing wrong would corrupt worlds.
  */
 public class GammaConfig extends YamlConfig {
     public static final GammaConfig configs = new GammaConfig();
@@ -39,21 +36,30 @@ public class GammaConfig extends YamlConfig {
     public boolean gamma_native_enabled = true;
 
     private GammaConfig() {
-        CONFIG_FILE = new File("GammaAutoThread.yml");
+        CONFIG_FILE = new File("gammaengine.yml");
         CONFIG_MODE = ConfigMode.PATH_BY_UNDERSCORE;
         CONFIG_HEADER = new String[]{
-                "GammaEngine AutoThread configuration",
+                "GammaEngine configuration",
                 "",
-                "This file only contains resource limits and diagnostics. The AutoThread runtime decides",
-                "by itself which mod, plugin, entity or tile entity code can run in parallel, by observing",
-                "what that code actually touches at runtime. There is nothing to declare here per mod."
+                "Every option is optional: the server runs with no configuration at all.",
+                "Each optimisation has its own switch, so it can be turned off on its own.",
+                "There is nothing to declare per mod or per plugin."
         };
+        migrateLegacyFile();
 
         try {
             init();
             save(); // rewrite the file so new options appear after an update
         } catch (InvalidConfigurationException e) {
-            GammaEngine.LOGGER.error("Failed to load GammaAutoThread.yml, falling back to defaults", e);
+            GammaEngine.LOGGER.error("Failed to load gammaengine.yml, falling back to defaults", e);
+        }
+    }
+
+    /** Carries over {@code GammaAutoThread.yml}, the name used by earlier builds; option paths did not change. */
+    private void migrateLegacyFile() {
+        File legacy = new File("GammaAutoThread.yml");
+        if (legacy.isFile() && !CONFIG_FILE.exists() && !legacy.renameTo(CONFIG_FILE)) {
+            GammaEngine.LOGGER.warn("Could not rename {} to {}, starting from defaults", legacy, CONFIG_FILE);
         }
     }
 
