@@ -115,12 +115,17 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
                 // package ownership checks and the Bukkit plugin bridge see them as first-party.
                 "io.github.gammaengine",
                 "io.github.gammaengine.autothread",
+                "io.github.gammaengine.bench",
                 "io.github.gammaengine.command",
                 "io.github.gammaengine.config",
+                "io.github.gammaengine.diag",
                 "io.github.gammaengine.metrics",
                 "io.github.gammaengine.nativeengine",
+                "io.github.gammaengine.network",
                 "io.github.gammaengine.platform",
-                "io.github.gammaengine.profiler"
+                "io.github.gammaengine.profiler",
+                "io.github.gammaengine.util",
+                "io.github.gammaengine.world"
         );
     }
 
