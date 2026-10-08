@@ -166,6 +166,9 @@ public final class ServerHealth {
                 + gc[1] + " ms");
 
         addLoad(lines, lastMinute);
+        lines.add(ChatColor.DARK_GRAY + "Java " + System.getProperty("java.version") + ", "
+                + System.getProperty("java.vm.name") + ", " + System.getProperty("os.name") + " "
+                + System.getProperty("os.arch") + ", " + Runtime.getRuntime().availableProcessors() + " CPU threads");
         return lines;
     }
 

@@ -23,6 +23,11 @@ import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+/**
+ * The former {@code /gamma} and {@code /crucible} command. No longer registered: its subcommands are
+ * now commands of their own ({@code /tps}, {@code /mods}, {@code /chunks}, {@code /findchunks},
+ * {@code /heapdump}). The class stays because it ships in the plugin API jar.
+ */
 public class CrucibleCommand extends Command {
 
     private static final DecimalFormat timeFormat = new DecimalFormat("########0.000");

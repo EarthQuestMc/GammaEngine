@@ -89,7 +89,11 @@ public class CrucibleModContainer extends DummyModContainer implements Plugin {
 
     @Subscribe
     public void serverStarting(FMLServerStartingEvent evt) {
-        evt.registerServerCommand("gamma", new CrucibleCommand(evt.getServer()));
+        // GammaEngine - direct commands instead of the /gamma (alias /crucible) subcommands
+        evt.registerServerCommand("mods", new io.github.gammaengine.command.ModsCommand());
+        evt.registerServerCommand("chunks", new io.github.gammaengine.command.ChunksCommand());
+        evt.registerServerCommand("findchunks", new io.github.gammaengine.command.FindChunksCommand());
+        evt.registerServerCommand("heapdump", new io.github.gammaengine.command.HeapDumpCommand());
         evt.registerServerCommand("autothread", new io.github.gammaengine.command.AutoThreadCommand()); // GammaEngine
         CrucibleAPI.registerModPlugin(this);
         metrics = new Metrics(this, 6555);

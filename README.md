@@ -47,8 +47,19 @@ Fichiers de configuration, tous facultatifs :
 | `gammaengine.yml` | Interrupteurs du moteur GammaEngine |
 | `Gamma.yml` | Réglages hérités de Crucible, migrés depuis `Crucible.yml` |
 
-Commandes : `/gamma` (alias `/crucible`) pour les informations serveur, `/autothread` pour l'état du
-moteur, le profilage, le banc synthétique et la mémoire.
+Commandes :
+
+| Commande | Ce qu'elle affiche | Permission |
+| --- | --- | --- |
+| `/tps` | TPS sur 5 s à 15 min, durée des ticks, CPU, mémoire, GC, charge et coût par joueur | `bukkit.command.tps` |
+| `/mods` | Les mods Forge chargés, actifs en vert | `gamma.mods` |
+| `/chunks [dump [all]]` | Chunks, entités et TileEntities par monde ; `dump` écrit le détail dans `chunk-dumps/` | `gamma.chunks` |
+| `/findchunks [dimension]` | Les 20 chunks chargés qui portent le plus de TileEntities | `gamma.findChunks` |
+| `/heapdump` | Dump du tas dans `dumps/` (le serveur se fige pendant l'écriture) | `gamma.heap` |
+| `/autothread` | Profilage, banc synthétique, enregistrement des ticks (`record`), mémoire | `gammaengine.autothread` |
+
+Les anciennes sous-commandes `/gamma` et `/crucible` sont remplacées par ces commandes ;
+`/version`, `/plugins` et `/restart` restent celles de Bukkit et de Spigot.
 
 ## Compiler
 
