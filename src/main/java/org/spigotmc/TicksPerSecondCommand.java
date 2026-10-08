@@ -1,6 +1,5 @@
 package org.spigotmc;
 
-import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 
@@ -19,18 +18,12 @@ public class TicksPerSecondCommand extends Command {
             return true;
         }
 
-        StringBuilder sb = new StringBuilder(ChatColor.GOLD + "TPS from last 1m, 5m, 15m: ");
-        for (double tps : net.minecraft.server.MinecraftServer.getServer().recentTps) {
-            sb.append(format(tps));
-            sb.append(", ");
+        // GammaEngine - TPS over five windows, tick durations, CPU, memory, GC and load, instead of
+        // three smoothed TPS figures; the first line keeps the "TPS from last ..." shape.
+        for (String line : io.github.gammaengine.diag.ServerHealth.get().report()) {
+            sender.sendMessage(line);
         }
-        sender.sendMessage(sb.substring(0, sb.length() - 2));
 
         return true;
-    }
-
-    private String format(double tps) {
-        return ((tps > 18.0) ? ChatColor.GREEN : (tps > 16.0) ? ChatColor.YELLOW : ChatColor.RED).toString()
-                + ((tps > 20.0) ? "*" : "") + Math.min(Math.round(tps * 100.0) / 100.0, 20.0);
     }
 }

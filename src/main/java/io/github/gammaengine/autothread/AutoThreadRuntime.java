@@ -56,6 +56,7 @@ public final class AutoThreadRuntime {
         mainThread = Thread.currentThread();
         GammaConfig.ensureLoaded();
         io.github.gammaengine.nativeengine.NativeEngine.get().load();
+        io.github.gammaengine.diag.ServerHealth.get().start();
         booted = true;
 
         GammaEngine.LOGGER.info("{} AutoThread runtime ready ({})", GammaEngine.NAME, CpuTopology.get());
@@ -142,6 +143,7 @@ public final class AutoThreadRuntime {
         }
         stopped = true;
         running = false;
+        io.github.gammaengine.diag.ServerHealth.get().stop();
         String recording = BenchRecorder.get().stop();
         if (recording != null) {
             GammaEngine.LOGGER.info("Bench recording stopped: {}", recording);
