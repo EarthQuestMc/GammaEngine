@@ -2,6 +2,26 @@
 
 Chemins relatifs à la racine du dépôt. `E/` = `eclipse/cauldron/src/main/java/`, `S/` = `src/main/java/`. Constat de départ : le serveur de test `run/` est en `online-mode=false`, `allow-flight=true`, `max-players=100`, sans liste blanche, **sans mod ni plugin** (`run/mods` et `run/plugins` vides, `run/server.properties`). Les affirmations viennent de la lecture du code ; rien n'a été exécuté.
 
+> **Mise à jour du 8 octobre 2026 : ce cahier a été confronté au serveur réel.** Les bots sont
+> dans [`tools/bench/`](../tools/bench/README.md) et tiennent 50 joueurs sans expulsion ni
+> « moved wrongly ». Onze écarts avec ce document y sont détaillés (section « Écarts
+> constatés »), les principaux :
+>
+> * l'ordre réel des paquets contient aussi `S37`, le message d'arrivée, `S30`, `S2F`, `S06`,
+>   `S1F` et un `S3F FORGE` entre les deux Ack du serveur ;
+> * l'entrée en jeu (`initializeConnectionToPlayer`) tourne sur le thread principal, pas sur un
+>   thread Netty ;
+> * après chaque `S08`, le deuxième paquet de déplacement est ignoré : le bot doit y répéter sa
+>   position, sinon le suivant déclenche « moved wrongly » ;
+> * la hauteur des pieds vaut `1.6200000047683716`, la distance de vue de `C15` est ignorée, le
+>   RTT du keep-alive n'est pas mesurable côté bot ;
+> * le vrai client envoie Ack(3) sur ModIdData puis Ack(4) et Ack(5).
+>
+> Le README note aussi trois défauts du serveur vus pendant les essais, à confirmer avec un vrai
+> client : une entrée en jeu perdue quand deux poignées de main FML se terminent en même temps
+> (attribut partagé du canal `FML`), une `ConcurrentModificationException` à l'entrée en jeu, et
+> l'avertissement de fuite mémoire du canal `FML` à chaque connexion.
+
 ## Principes de codage
 
 - Trame : `VarInt longueur`, `VarInt id`, charge. **Aucune compression** en protocole 5 ; le chiffrement n'existe qu'en mode en ligne (`NetHandlerLoginServer.java:167-177`), donc jamais pour le banc.
