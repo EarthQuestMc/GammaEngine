@@ -7,6 +7,8 @@ import io.github.gammaengine.platform.CpuTopology;
 import io.github.gammaengine.profiler.GammaProfiler;
 import io.github.gammaengine.profiler.TickStatistics;
 
+import java.util.Locale;
+
 /**
  * The engine's lifecycle and tick measurement hooks.
  *
@@ -69,7 +71,7 @@ public final class AutoThreadRuntime {
         // because that is the number an operator actually waits through.
         try {
             long uptimeMillis = java.lang.management.ManagementFactory.getRuntimeMXBean().getUptime();
-            GammaEngine.LOGGER.info("Startup complete in {} s from JVM start", String.format("%.2f", uptimeMillis / 1000.0));
+            GammaEngine.LOGGER.info("Startup complete in {} s from JVM start", String.format(Locale.ROOT, "%.2f", uptimeMillis / 1000.0));
             GammaProfiler.get().record("server.startup", uptimeMillis * 1_000_000L);
         } catch (Throwable ignored) {
             // A JVM without the runtime MX bean still boots; it just does not report the number.
@@ -181,7 +183,7 @@ public final class AutoThreadRuntime {
         out.append(GammaEngine.NAME).append(" AutoThread runtime\n");
         out.append("  State: ").append(booted ? (running ? "running" : "booted") : "not booted").append('\n');
         out.append("  CPU: ").append(CpuTopology.get()).append('\n');
-        out.append(String.format("  TPS: %.2f / %.2f / %.2f (1m, 5m, 15m)%n",
+        out.append(String.format(Locale.ROOT, "  TPS: %.2f / %.2f / %.2f (1m, 5m, 15m)%n",
                 ticks.tps1m(), ticks.tps5m(), ticks.tps15m()));
         TickStatistics.Mspt mspt = ticks.mspt();
         if (mspt != null) {

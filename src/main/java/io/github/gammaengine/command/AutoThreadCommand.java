@@ -15,6 +15,7 @@ import org.bukkit.command.CommandSender;
 
 import java.io.File;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * {@code /autothread}: the operator-facing window into the runtime.
@@ -186,7 +187,7 @@ public class AutoThreadCommand extends Command {
         TickStatistics.Mspt mspt = ticks.mspt();
         List<LatencyHistogram.Snapshot> top = GammaProfiler.get().registry().snapshotsByCost();
         StringBuilder out = new StringBuilder();
-        out.append(String.format("TPS %.2f, MSPT %s", ticks.tps1m(), mspt == null ? "n/a" : mspt.toString()));
+        out.append(String.format(Locale.ROOT, "TPS %.2f, MSPT %s", ticks.tps1m(), mspt == null ? "n/a" : mspt.toString()));
         if (!top.isEmpty()) {
             out.append(", hottest: ").append(top.get(0).name());
         }

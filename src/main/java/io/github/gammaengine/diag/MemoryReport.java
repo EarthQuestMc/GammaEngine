@@ -7,6 +7,7 @@ import java.lang.management.BufferPoolMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryUsage;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Where the server's memory actually is.
@@ -47,19 +48,19 @@ public final class MemoryReport {
         MemoryUsage nonHeap = ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage();
 
         out.append("Memory").append(collectFirst ? " (after a forced collection)" : "").append('\n');
-        out.append(String.format("  Heap:      %s used, %s committed, %s max%n",
+        out.append(String.format(Locale.ROOT, "  Heap:      %s used, %s committed, %s max%n",
                 mib(heap.getUsed()), mib(heap.getCommitted()), mib(heap.getMax())));
-        out.append(String.format("  Non-heap:  %s used, %s committed  (classes and metaspace)%n",
+        out.append(String.format(Locale.ROOT, "  Non-heap:  %s used, %s committed  (classes and metaspace)%n",
                 mib(nonHeap.getUsed()), mib(nonHeap.getCommitted())));
 
         for (BufferPoolMXBean pool : ManagementFactory.getPlatformMXBeans(BufferPoolMXBean.class)) {
-            out.append(String.format("  %-9s %s used across %d buffer(s)%n",
+            out.append(String.format(Locale.ROOT, "  %-9s %s used across %d buffer(s)%n",
                     pool.getName() + ":", mib(pool.getMemoryUsed()), pool.getCount()));
         }
 
         Runtime runtime = Runtime.getRuntime();
-        out.append(String.format("  Threads:   %d live%n", ManagementFactory.getThreadMXBean().getThreadCount()));
-        out.append(String.format("  JVM:       %s free of %s allocated%n",
+        out.append(String.format(Locale.ROOT, "  Threads:   %d live%n", ManagementFactory.getThreadMXBean().getThreadCount()));
+        out.append(String.format(Locale.ROOT, "  JVM:       %s free of %s allocated%n",
                 mib(runtime.freeMemory()), mib(runtime.totalMemory())));
 
         MinecraftServer server = MinecraftServer.getServer();
@@ -77,13 +78,13 @@ public final class MemoryReport {
                 chunks += loaded;
                 entities += world.loadedEntityList.size();
                 tiles += world.loadedTileEntityList.size();
-                out.append(String.format("    %-16s %5d chunks, %5d entities, %5d tile entities%n",
+                out.append(String.format(Locale.ROOT, "    %-16s %5d chunks, %5d entities, %5d tile entities%n",
                         world.getWorldInfo().getWorldName() + "/" + world.provider.getDimensionName(),
                         loaded, world.loadedEntityList.size(), world.loadedTileEntityList.size()));
             }
             // A loaded 1.7.10 chunk column costs roughly 50 to 100 kB of block data alone, before
             // entities and tile entities, which is why chunk count is the number that matters.
-            out.append(String.format("    total            %5d chunks, %5d entities, %5d tile entities (~%s of block data)%n",
+            out.append(String.format(Locale.ROOT, "    total            %5d chunks, %5d entities, %5d tile entities (~%s of block data)%n",
                     chunks, entities, tiles, mib(chunks * 70L * 1024L)));
         }
         return out.toString();
@@ -93,7 +94,7 @@ public final class MemoryReport {
         if (bytes < 0) {
             return "unbounded";
         }
-        return String.format("%.1f MiB", bytes / 1048576.0);
+        return String.format(Locale.ROOT, "%.1f MiB", bytes / 1048576.0);
     }
 
     /** Heap bytes in use, for metrics. */

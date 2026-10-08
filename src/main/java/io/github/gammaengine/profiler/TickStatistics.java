@@ -1,6 +1,7 @@
 package io.github.gammaengine.profiler;
 
 import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Rolling tick statistics: TPS over three windows and MSPT percentiles over the last minute.
@@ -226,7 +227,7 @@ public final class TickStatistics {
 
         @Override
         public String toString() {
-            return String.format("mean=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms max=%.2fms",
+            return String.format(Locale.ROOT, "mean=%.2fms p50=%.2fms p95=%.2fms p99=%.2fms max=%.2fms",
                     mean(), p50(), p95(), p99(), max());
         }
     }
