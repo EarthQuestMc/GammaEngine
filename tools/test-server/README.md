@@ -44,11 +44,19 @@ tools/test-server/start.sh
 ```
 
 Par défaut : `java` du PATH, 4 Go de tas. Sur Java 9 ou plus récent, le script ajoute les arguments
-de `java9args.txt`. Exemple sur Java 21 avec ZGC générationnel :
+de `java9args.txt`. Exemple sur Java 21 avec ZGC générationnel et le journal des pauses :
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\test-server\start.ps1 -Java "$HOME\.jdks\ms-21.0.12.1\bin\java.exe" -JvmArgs '-XX:+UseZGC','-XX:+ZGenerational'
+powershell -ExecutionPolicy Bypass -File tools\test-server\start.ps1 -Java "$HOME\.jdks\ms-21.0.12.1\bin\java.exe" -Gc zgc -GcLog
 ```
+
+| Option (`start.ps1` / `start.sh`) | Effet |
+| --- | --- |
+| `-Gc zgc` / `--gc zgc` | ZGC, Java 15 ou plus ; générationnel sur Java 21 et 22, il l'est par défaut à partir de 23 |
+| `-Gc g1` / `--gc g1` | G1, utile pour comparer sur Java 8, dont le GC par défaut est Parallel |
+| `-GcLog` / `--gc-log` | Journal GC et safepoints dans `logs/gc-<pid>.log` : JMX arrondit les pauses à la milliseconde |
+| `-JvmArgs` / `-- …` | Arguments JVM supplémentaires, ajoutés après les autres |
+| `-NoConsole` / `--no-console` | Pas de lecture de la console, pour un serveur en arrière-plan |
 
 ## Réglages de test
 
@@ -64,6 +72,7 @@ premier démarrage.
 | | `snooper-enabled=false`, `spawn-protection=0` | Pas d'envoi de statistiques, construction libre au spawn |
 | `bukkit.yml` | `settings.connection-throttle: -1` | Les bots se connectent tous depuis la même adresse |
 | `Gamma.yml` | `thermos.logging.clientModList: false` | Pas une ligne de journal par client avec toute sa liste de mods |
+| `ops.json`, `whitelist.json`, `banned-players.json`, `banned-ips.json` | listes vides | Pas quatre piles d'exception `FileNotFoundException` au premier démarrage |
 
 Pour tester un modpack, déposer ses jars dans `test-server/mods/` et `test-server/plugins/`.
 Pour ouvrir le serveur à d'autres machines, vider `server-ip` dans `test-server/server.properties`
